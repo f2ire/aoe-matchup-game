@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { units, determineWinner } from "@/data/units";
+import { aoe4Units, determineWinner, AoE4Unit } from "@/data/units-new";
 import { UnitCard } from "@/components/UnitCard";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
@@ -13,18 +13,39 @@ const Quiz = () => {
   
   const [currentRound, setCurrentRound] = useState(1);
   const [score, setScore] = useState(0);
-  const [matchup, setMatchup] = useState<{ unit1: any; unit2: any } | null>(null);
+  const [matchup, setMatchup] = useState<{ unit1: AoE4Unit; unit2: AoE4Unit } | null>(null);
   const [feedback, setFeedback] = useState<"correct" | "wrong" | null>(null);
 
   const generateMatchup = () => {
-    const shuffled = [...units].sort(() => Math.random() - 0.5);
+    if (!aoe4Units || aoe4Units.length < 2) {
+      console.error('Pas assez d\'unités pour générer un matchup');
+      return;
+    }
+    const shuffled = [...aoe4Units].sort(() => Math.random() - 0.5);
     setMatchup({ unit1: shuffled[0], unit2: shuffled[1] });
     setFeedback(null);
   };
 
   useEffect(() => {
-    generateMatchup();
+    if (aoe4Units && aoe4Units.length >= 2) {
+      generateMatchup();
+    }
   }, []);
+
+  // Protection contre les données non chargées
+  if (!aoe4Units || aoe4Units.length === 0) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-red-500 mb-4">Erreur de chargement</h2>
+          <p className="text-muted-foreground">Les données des unités n'ont pas pu être chargées.</p>
+          <Button onClick={() => navigate("/")} className="mt-4">Retour à l'accueil</Button>
+        </div>
+      </div>
+    );
+  }
+
+  if (!matchup) return <div className="min-h-screen flex items-center justify-center">Chargement...</div>;
 
   const handleChoice = (chosenUnitId: string) => {
     if (!matchup || feedback) return;
