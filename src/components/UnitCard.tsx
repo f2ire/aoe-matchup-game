@@ -1,4 +1,4 @@
-import { AoE4Unit, getPrimaryWeapon, getArmorValue, getTotalCost } from "@/data/units-new";
+import { AoE4Unit, getPrimaryWeapon, getArmorValue, getTotalCost } from "@/data/unified-units";
 import { Card } from "@/components/ui/card";
 
 interface UnitCardProps {
@@ -13,6 +13,14 @@ export const UnitCard = ({ unit, side = "left", onClick, className }: UnitCardPr
   const meleeArmor = getArmorValue(unit, "melee");
   const rangedArmor = getArmorValue(unit, "ranged");
   const totalCost = getTotalCost(unit);
+  
+  // Déterminer le label pour oliveoil selon la civilisation
+  const getOliveoilLabel = () => {
+    if (unit.civs.includes('mac')) {
+      return '🪙 Silver:';
+    }
+    return '🫒 Olive Oil:';
+  };
 
   return (
     <Card
@@ -50,22 +58,36 @@ export const UnitCard = ({ unit, side = "left", onClick, className }: UnitCardPr
           
           {unit.costs.food > 0 && (
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Food:</span>
+              <span className="text-muted-foreground">🌾 Food:</span>
               <span className="text-foreground">{unit.costs.food}</span>
             </div>
           )}
           
           {unit.costs.wood > 0 && (
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Wood:</span>
+              <span className="text-muted-foreground">🪵 Wood:</span>
               <span className="text-foreground">{unit.costs.wood}</span>
             </div>
           )}
           
           {unit.costs.gold > 0 && (
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Gold:</span>
+              <span className="text-muted-foreground">🪙 Gold:</span>
               <span className="text-foreground">{unit.costs.gold}</span>
+            </div>
+          )}
+          
+          {unit.costs.stone > 0 && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">🪨 Stone:</span>
+              <span className="text-foreground">{unit.costs.stone}</span>
+            </div>
+          )}
+          
+          {(unit.costs.oliveoil ?? 0) > 0 && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">{getOliveoilLabel()}</span>
+              <span className="text-foreground">{unit.costs.oliveoil}</span>
             </div>
           )}
           

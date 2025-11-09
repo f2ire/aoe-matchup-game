@@ -1,6 +1,6 @@
 import { useState, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { aoe4Units, AoE4Unit } from "@/data/units-new";
+import { aoe4Units, AoE4Unit } from "@/data/unified-units";
 import { CIVILIZATIONS, Civilization } from "@/data/civilizations";
 import { UnitCard } from "@/components/UnitCard";
 import { Button } from "@/components/ui/button";

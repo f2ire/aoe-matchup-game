@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { aoe4Units, determineWinner, AoE4Unit } from "@/data/units-new";
+import { aoe4Units, determineWinner, AoE4Unit } from "@/data/unified-units";
 import { UnitCard } from "@/components/UnitCard";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
