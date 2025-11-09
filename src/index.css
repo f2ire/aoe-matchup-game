@@ -1,0 +1,111 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Definition of the design system. All colors, gradients, fonts, etc should be defined here. 
+All colors MUST be HSL.
+*/
+
+@layer base {
+  :root {
+    --background: 210 20% 8%;
+    --foreground: 40 10% 90%;
+
+    --card: 210 18% 12%;
+    --card-foreground: 40 10% 90%;
+
+    --popover: 210 18% 12%;
+    --popover-foreground: 40 10% 90%;
+
+    --primary: 45 75% 65%;
+    --primary-foreground: 210 20% 8%;
+
+    --secondary: 210 15% 18%;
+    --secondary-foreground: 40 10% 90%;
+
+    --muted: 210 15% 16%;
+    --muted-foreground: 40 5% 60%;
+
+    --accent: 45 75% 65%;
+    --accent-foreground: 210 20% 8%;
+
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 40 10% 90%;
+
+    --success: 142 70% 45%;
+    --success-foreground: 40 10% 90%;
+
+    --border: 45 40% 35%;
+    --input: 210 15% 18%;
+    --ring: 45 75% 65%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 210 18% 10%;
+    --sidebar-foreground: 40 10% 90%;
+    --sidebar-primary: 45 75% 65%;
+    --sidebar-primary-foreground: 210 20% 8%;
+    --sidebar-accent: 210 15% 18%;
+    --sidebar-accent-foreground: 40 10% 90%;
+    --sidebar-border: 45 40% 35%;
+    --sidebar-ring: 45 75% 65%;
+  }
+
+  .dark {
+    --background: 210 20% 8%;
+    --foreground: 40 10% 90%;
+
+    --card: 210 18% 12%;
+    --card-foreground: 40 10% 90%;
+
+    --popover: 210 18% 12%;
+    --popover-foreground: 40 10% 90%;
+
+    --primary: 45 75% 65%;
+    --primary-foreground: 210 20% 8%;
+
+    --secondary: 210 15% 18%;
+    --secondary-foreground: 40 10% 90%;
+
+    --muted: 210 15% 16%;
+    --muted-foreground: 40 5% 60%;
+
+    --accent: 45 75% 65%;
+    --accent-foreground: 210 20% 8%;
+
+    --destructive: 0 70% 50%;
+    --destructive-foreground: 40 10% 90%;
+
+    --success: 142 70% 45%;
+    --success-foreground: 40 10% 90%;
+
+    --border: 45 40% 35%;
+    --input: 210 15% 18%;
+    --ring: 45 75% 65%;
+    --sidebar-background: 210 18% 10%;
+    --sidebar-foreground: 40 10% 90%;
+    --sidebar-primary: 45 75% 65%;
+    --sidebar-primary-foreground: 210 20% 8%;
+    --sidebar-accent: 210 15% 18%;
+    --sidebar-accent-foreground: 40 10% 90%;
+    --sidebar-border: 45 40% 35%;
+    --sidebar-ring: 45 75% 65%;
+  }
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@400;600;700&family=Inter:wght@300;400;500;600&display=swap');
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  body {
+    @apply bg-background text-foreground;
+    font-family: 'Inter', sans-serif;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    font-family: 'Cinzel', serif;
+  }
+}
