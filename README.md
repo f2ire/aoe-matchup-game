@@ -1,73 +1,117 @@
-# Welcome to your Lovable project
+# AOE Matchup Game
+![App Preview](./public/preview.png)
 
-## Project info
+## 🎮 Project Overview
 
-**URL**: https://lovable.dev/projects/a1534dc6-0dbe-47c6-8a65-80e889949763
+AOE Matchup Game is an educational tool that helps Age of Empires IV players learn and understand unit matchups. Whether you're a beginner trying to learn the basics or an experienced player looking to sharpen your knowledge, this app provides an interactive way to master the rock-paper-scissors dynamics of AoE IV combat.
 
-## How can I edit this code?
+## 🎯 How to Use
 
-There are several ways of editing your application.
+### Quiz Mode
+1. Navigate to the Quiz page
+2. Select the number of rounds (5, 10, or 20)
+3. For each matchup, click on the unit you think will win
+4. Review your score and learn from mistakes at the end
 
-**Use Lovable**
+### Sandbox Mode
+1. Navigate to the Sandbox page
+2. Select two units from the dropdown menus
+3. Compare their stats side-by-side
+4. Learn the strengths and weaknesses of each unit
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/a1534dc6-0dbe-47c6-8a65-80e889949763) and start prompting.
+## 🛠️ Tech Stack
 
-Changes made via Lovable will be committed automatically to this repo.
+- **[React](https://react.dev/)** - UI library for building interactive interfaces
+- **[TypeScript](https://www.typescriptlang.org/)** - Type-safe JavaScript
+- **[Vite](https://vitejs.dev/)** - Fast build tool and development server
+- **[TailwindCSS](https://tailwindcss.com/)** - Utility-first CSS framework
+- **[Zustand](https://zustand-demo.pmnd.rs/)** - Lightweight state management
+- **[Framer Motion](https://www.framer.com/motion/)** - Animation library for smooth transitions
+- **[Axios](https://axios-http.com/)** - HTTP client for API requests
+- **[Shadcn/ui](https://ui.shadcn.com/)** - Re-usable component library
+- **[React Router](https://reactrouter.com/)** - Client-side routing
 
-**Use your preferred IDE**
+## 🚀 Setup Instructions
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+### Prerequisites
+- Node.js 18+ or Bun runtime
+- npm, yarn, or bun package manager
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+### Installation
 
-Follow these steps:
+1. **Clone the repository**
+   ```bash
+   git clone https://github.com/f2ire/aoe-matchup-game.git
+   cd aoe-matchup-game
+   ```
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+2. **Install dependencies**
+   ```bash
+   npm install
+   ```
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+3. **Start the development server**
+   ```bash
+   npm run dev
+   ```
 
-# Step 3: Install the necessary dependencies.
-npm i
+4. **Open your browser**
+   
+   Navigate to `http://localhost:8080` (or the port shown in your terminal)
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+### Build for Production
+
+```bash
+npm run build
+npm run preview
 ```
 
-**Edit a file directly in GitHub**
+## 🌐 API Reference
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+This project uses the **[AOE4World API](https://aoe4world.com/)** to fetch:
+- Unit data and statistics
+- Official unit icons and images
+- Real-time game information
 
-**Use GitHub Codespaces**
+The API provides comprehensive data about Age of Empires IV units, ensuring accuracy and up-to-date information for all matchup scenarios.
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+### API Endpoints Used
+- Unit statistics and attributes
+- Unit icons and visual assets
+- Civilization-specific unit data
 
-## What technologies are used for this project?
+## 📁 Project Structure
 
-This project is built with:
+```
+aoe4-matchup-game/
+├── src/
+│   ├── components/      # Reusable React components
+│   ├── pages/          # Main page components (Quiz, Sandbox, Results)
+│   ├── data/           # Unit data and configurations
+│   ├── hooks/          # Custom React hooks
+│   ├── lib/            # Utility functions
+│   └── App.tsx         # Main application component
+├── public/             # Static assets
+└── package.json        # Project dependencies
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+## 📝 License
 
-## How can I deploy this project?
+This project is licensed under the **MIT License** - see the [LICENSE](LICENSE) file for details.
 
-Simply open [Lovable](https://lovable.dev/projects/a1534dc6-0dbe-47c6-8a65-80e889949763) and click on Share -> Publish.
+## 🙏 Acknowledgments
 
-## Can I connect a custom domain to my Lovable project?
+- **Inspiration**: This project was inspired by the design principles of [Aegis UI](https://aoe-aegis.vercel.app/)
+- **Data Source**: Unit data and icons provided by [AOE4World](https://aoe4world.com/)
 
-Yes, you can!
+## 🤝 Contributing
 
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
+Contributions, issues, and feature requests are welcome! Feel free to check the [issues page](https://github.com/f2ire/aoe-matchup-game/issues).
 
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+## 📧 Contact
+
+For questions or suggestions, please open an issue on GitHub.
+
+---
+
+Made with ❤️ for the Age of Empires IV community
