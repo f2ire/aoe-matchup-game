@@ -211,6 +211,7 @@ export function getUnitsByClass(className: string): AoE4Unit[] {
 
 /**
  * Récupère la variation d'une unité pour une civ et un âge spécifiques
+ * Si civAbbr est "all", prend la première variation de cet âge
  */
 export function getUnitVariation(
   unitId: string,
@@ -219,6 +220,11 @@ export function getUnitVariation(
 ): UnifiedVariation | undefined {
   const unit = allUnits.find(u => u.id === unitId);
   if (!unit) return undefined;
+  
+  // Si "all", prendre la première variation de cet âge
+  if (civAbbr === "all") {
+    return unit.variations.find(v => v.age === age);
+  }
   
   // Chercher la variation exacte pour cette civ et cet âge
   return unit.variations.find(v => 
@@ -235,6 +241,44 @@ export function getAllVariations(unitId: string): UnifiedVariation[] {
 }
 
 /**
+ * Récupère les âges disponibles pour une unité et une civilisation
+ * Si civAbbr est "all", retourne tous les âges disponibles pour toutes les civs
+ */
+export function getAvailableAges(unitId: string, civAbbr: string): number[] {
+  const variations = getAllVariations(unitId);
+  
+  // Si "all", retourner tous les âges disponibles
+  if (civAbbr === "all") {
+    const allAges = variations
+      .map(v => v.age)
+      .filter((age, index, self) => self.indexOf(age) === index)
+      .sort((a, b) => a - b);
+    return allAges;
+  }
+  
+  // Sinon filtrer par civilisation
+  const ages = variations
+    .filter(v => v.civs.includes(civAbbr))
+    .map(v => v.age)
+    .filter((age, index, self) => self.indexOf(age) === index) // Unique
+    .sort((a, b) => a - b);
+  
+  // Fallback: si aucun âge trouvé pour cette civ, retourner tous les âges disponibles
+  return ages.length > 0 ? ages : variations
+    .map(v => v.age)
+    .filter((age, index, self) => self.indexOf(age) === index)
+    .sort((a, b) => a - b);
+}
+
+/**
+ * Récupère l'âge maximum disponible pour une unité
+ */
+export function getMaxAge(unitId: string, civAbbr: string): number {
+  const ages = getAvailableAges(unitId, civAbbr);
+  return ages.length > 0 ? Math.max(...ages) : 4;
+}
+
+/**
  * Calcule le coût total d'une unité (incluant les ressources secondaires)
  */
 export function getTotalCost(unit: AoE4Unit): number {
@@ -248,16 +292,27 @@ export function getTotalCost(unit: AoE4Unit): number {
 /**
  * Récupère la valeur d'armure pour un type spécifique
  */
-export function getArmorValue(unit: AoE4Unit, armorType: string): number {
-  const armor = unit.armor.find(a => a.type.toLowerCase() === armorType.toLowerCase());
+export function getArmorValue(unit: AoE4Unit | UnifiedVariation, armorType: string): number {
+  const armor = unit.armor?.find(a => a.type.toLowerCase() === armorType.toLowerCase());
   return armor?.value || 0;
 }
 
 /**
- * Récupère l'arme principale de l'unité
+ * Récupère l'arme principale de l'unité ou variation
  */
-export function getPrimaryWeapon(unit: AoE4Unit): UnifiedWeapon | undefined {
+export function getPrimaryWeapon(unit: AoE4Unit | UnifiedVariation): UnifiedWeapon | undefined {
   return unit.weapons[0];
+}
+
+/**
+ * Calcule le coût total d'une variation
+ */
+export function getTotalCostFromVariation(variation: UnifiedVariation): number {
+  return variation.costs.food + 
+         variation.costs.wood + 
+         variation.costs.gold + 
+         variation.costs.stone +
+         (variation.costs.oliveoil || 0);
 }
 
 /**
