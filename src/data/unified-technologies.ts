@@ -1,29 +1,32 @@
 // Types pour les technologies
 export interface TechnologyEffect {
-  property: string; // "meleeAttack", "rangedAttack", "meleeArmor", "rangedArmor", "hitpoints", "moveSpeed"
-  select: {
+  property: string; // "meleeAttack", "rangedAttack", "meleeArmor", "rangedArmor", "hitpoints", "moveSpeed", "maxRange", "attackSpeed"
+  select?: {
     class?: string[][];
     id?: string[];
   };
   effect: string; // "change", "multiply"
   value: number;
-  type: string; // "passive", "ability"
+  type: string; // "passive", "ability", "bonus"
+  target?: { // Pour les bonus de dégâts
+    class: string[][];
+  };
 }
 
 export interface TechnologyVariation {
   id: string;
-  baseId: string;
-  type: string;
-  name: string;
+  baseId?: string;
+  type?: string;
+  name?: string;
   pbgid: number;
   attribName: string;
-  age: number;
+  age?: number;
   civs: string[];
-  description: string;
-  classes: string[];
-  displayClasses: string[];
-  unique: boolean;
-  costs: {
+  description?: string;
+  classes?: string[];
+  displayClasses?: string[];
+  unique?: boolean;
+  costs?: {
     food: number;
     wood: number;
     stone: number;
@@ -34,9 +37,9 @@ export interface TechnologyVariation {
     popcap: number;
     time: number;
   };
-  producedBy: string[];
-  icon: string;
-  effects: TechnologyEffect[];
+  producedBy?: string[];
+  icon?: string;
+  effects?: TechnologyEffect[];
 }
 
 export interface Technology {
@@ -51,16 +54,12 @@ export interface Technology {
   icon: string;
   description: string;
   variations: TechnologyVariation[];
+  effects?: TechnologyEffect[]; // Effects au niveau de la technologie (all-optimized_tec.json)
 }
+import allTechnologiesData from './all-optimized_tec.json';
 
-// Import all technology JSON files
-const technologyContext = import.meta.glob('./unified_tec/*.json', { eager: true });
-
-// Parse all technologies
-export const allTechnologies: Technology[] = Object.values(technologyContext).map(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (module: any) => module.default || module
-);
+// Parse all technologies from the unified file
+export const allTechnologies: Technology[] = allTechnologiesData.data as Technology[];
 
 // Filtrer les technologies qui affectent les stats de combat
 const combatProperties = [
@@ -69,14 +68,63 @@ const combatProperties = [
   'meleeArmor',
   'rangedArmor',
   'hitpoints',
-  'moveSpeed'
+  'moveSpeed',
+  'maxRange',         // Portée maximale
+  'attackSpeed',      // Vitesse d'attaque
+  'bonusDamage'       // Dégâts bonus
+];
+
+// Classes de cibles non-combattantes à exclure
+const nonCombatTargets = [
+  'hunt',           // Animaux sauvages
+  'herdable',       // Moutons, etc.
+  'wildlife',       // Faune
+  'gaia',           // Entités neutres
+  'building',       // Bâtiments (sauf si c'est une unité de siège)
+  'economic'        // Unités économiques
 ];
 
 export function isCombatTechnology(tech: Technology): boolean {
+  // Vérifier les effects au niveau de la technologie (all-optimized_tec.json)
+  const techLevelEffects = tech.effects;
+  if (techLevelEffects && techLevelEffects.length > 0) {
+    const hasCombatEffect = techLevelEffects.some(effect => {
+      // Vérifier si c'est une propriété de combat
+      if (!combatProperties.includes(effect.property)) return false;
+      
+      // Exclure les effets qui ciblent uniquement des non-combattants
+      if (effect.target?.class) {
+        const targetClasses = effect.target.class.flat();
+        // Si toutes les cibles sont non-combattantes, ignorer cet effet
+        const allNonCombat = targetClasses.every((cls: string) => 
+          nonCombatTargets.some(nonCombat => cls.includes(nonCombat))
+        );
+        if (allNonCombat) return false;
+      }
+      
+      return true;
+    });
+    if (hasCombatEffect) return true;
+  }
+
+  // Aussi vérifier les effects au niveau des variations (fichiers individuels unified_tec/)
   return tech.variations.some(variation => 
-    variation.effects?.some(effect => 
-      combatProperties.includes(effect.property)
-    )
+    variation.effects?.some(effect => {
+      // Vérifier si c'est une propriété de combat
+      if (!combatProperties.includes(effect.property)) return false;
+      
+      // Exclure les effets qui ciblent uniquement des non-combattants
+      if (effect.target?.class) {
+        const targetClasses = effect.target.class.flat();
+        // Si toutes les cibles sont non-combattantes, ignorer cet effet
+        const allNonCombat = targetClasses.every((cls: string) => 
+          nonCombatTargets.some(nonCombat => cls.includes(nonCombat))
+        );
+        if (allNonCombat) return false;
+      }
+      
+      return true;
+    })
   );
 }
 
@@ -141,15 +189,39 @@ export function getTechnologiesForUnit(
       return false;
     }
     
-    // Vérifier l'âge minimum
-    if (tech.minAge > age) {
-      return false;
+    // Ne plus filtrer par âge minimum - toutes les technologies sont sélectionnables
+    
+    // Vérifier si les effects au niveau de la technologie affectent cette unité (all-optimized_tec.json)
+    if (tech.effects && tech.effects.length > 0) {
+      const affectsUnit = tech.effects.some(effect => {
+        let matchesById = false;
+        let matchesByClass = false;
+        let matchesByIdAsClass = false;
+        
+        if (effect.select?.id && unitId) {
+          matchesById = effect.select.id.some(id => id.toLowerCase() === unitId.toLowerCase());
+          matchesByIdAsClass = effect.select.id.some(id =>
+            unitClasses.some(unitClass => unitClass.toLowerCase() === id.toLowerCase())
+          );
+        }
+        
+        if (effect.select?.class) {
+          matchesByClass = effect.select.class.some(classGroup =>
+            classGroup.every(className => 
+              unitClasses.some(unitClass => unitClass.toLowerCase() === className.toLowerCase())
+            )
+          );
+        }
+        
+        return matchesById || matchesByClass || matchesByIdAsClass;
+      });
+      
+      if (affectsUnit) return true;
     }
     
-    // Vérifier si au moins une variation affecte cette unité
+    // Vérifier si au moins une variation affecte cette unité (fichiers individuels)
     return tech.variations.some(variation => {
       if (civAbbr !== 'all' && !variation.civs.includes(civAbbr)) return false;
-      if (variation.age > age) return false;
       return technologyAffectsUnit(variation, unitClasses, unitId);
     });
   });
@@ -166,19 +238,35 @@ export function getTechnologyVariation(
   const tech = allTechnologies.find(t => t.id === techId);
   if (!tech) return null;
 
-  // Trouver la variation pour cette civ et cet âge
+  // Vérifier que la technologie est disponible à cet âge
+  if (tech.minAge > age) return null;
+
+  // Trouver la variation pour cette civ
+  // Note: Dans all-optimized_tec.json, les variations n'ont pas de champ "age"
+  // L'âge est déterminé par tech.minAge
   const variation = tech.variations.find(v => {
     if (civAbbr !== 'all' && !v.civs.includes(civAbbr)) return false;
-    if (v.age !== age) return false;
     return true;
   });
 
-  // Si pas de variation exacte, prendre la première qui correspond à l'âge
-  if (!variation && civAbbr === 'all') {
-    return tech.variations.find(v => v.age === age) || null;
+  // Si pas de variation trouvée, essayer de prendre la première qui a des effects
+  let finalVariation = variation;
+  if (!finalVariation) {
+    finalVariation = tech.variations.find(v => v.effects && v.effects.length > 0) || tech.variations[0] || null;
   }
 
-  return variation || null;
+  if (!finalVariation) return null;
+
+  // Si les effects sont au niveau de la technologie (all-optimized_tec.json),
+  // fusionner avec la variation
+  if (tech.effects && tech.effects.length > 0) {
+    return {
+      ...finalVariation,
+      effects: tech.effects
+    };
+  }
+
+  return finalVariation;
 }
 
 // Appliquer les effets des technologies aux stats
@@ -189,6 +277,9 @@ export interface UnitStats {
   meleeArmor: number;
   rangedArmor: number;
   moveSpeed: number;
+  attackSpeed?: number;
+  maxRange?: number;
+  bonusDamage?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
 export function applyTechnologyEffects(
@@ -197,7 +288,11 @@ export function applyTechnologyEffects(
   activeTechnologies: TechnologyVariation[],
   unitId?: string
 ): UnitStats {
-  const modifiedStats = { ...baseStats };
+  // Faire une copie profonde des bonusDamage pour éviter les mutations
+  const modifiedStats = { 
+    ...baseStats,
+    bonusDamage: baseStats.bonusDamage ? baseStats.bonusDamage.map(bonus => ({ ...bonus, classes: [...(bonus.classes || [])] })) : []
+  };
 
   // Collecter tous les effets applicables
   interface ApplicableEffect {
@@ -206,7 +301,16 @@ export function applyTechnologyEffects(
     value: number;
   }
   
+  interface SpecialEffect {
+    property: string;
+    effectType: 'change' | 'multiply';
+    value: number;
+    target?: { class: string[][] };
+    type?: string;
+  }
+  
   const applicableEffects: ApplicableEffect[] = [];
+  const specialEffects: SpecialEffect[] = [];
 
   for (const tech of activeTechnologies) {
     if (!tech.effects) continue;
@@ -250,6 +354,28 @@ export function applyTechnologyEffects(
       const property = effect.property;
       if (!combatProperties.includes(property)) continue;
 
+      // Traiter les propriétés spéciales
+      if (property === 'maxRange' || property === 'attackSpeed') {
+        specialEffects.push({
+          property,
+          effectType: effect.effect as 'change' | 'multiply',
+          value: effect.value
+        });
+        continue;
+      }
+
+      // Traiter les bonus de dégâts (type: 'bonus')
+      if ((property === 'meleeAttack' || property === 'rangedAttack') && effect.type === 'bonus') {
+        specialEffects.push({
+          property,
+          effectType: effect.effect as 'change' | 'multiply',
+          value: effect.value,
+          target: effect.target,
+          type: 'bonus'
+        });
+        continue;
+      }
+
       let statKey: keyof UnitStats;
       switch (property) {
         case 'meleeAttack':
@@ -290,12 +416,15 @@ export function applyTechnologyEffects(
   // Phase 1: Appliquer les additions (change)
   for (const effect of applicableEffects) {
     if (effect.effectType === 'change') {
+      // Exclure attackSpeed et bonusDamage qui ne sont pas modifiables ici
+      if (effect.statKey === 'attackSpeed' || effect.statKey === 'bonusDamage') continue;
+      
       // Pour moveSpeed, "change" représente un pourcentage
       if (effect.statKey === 'moveSpeed') {
-        modifiedStats[effect.statKey] *= (1 + effect.value / 100);
+        (modifiedStats[effect.statKey] as number) *= (1 + effect.value / 100);
       } else {
         // Pour les autres stats, "change" est une addition pure
-        modifiedStats[effect.statKey] += effect.value;
+        (modifiedStats[effect.statKey] as number) += effect.value;
       }
     }
   }
@@ -303,7 +432,67 @@ export function applyTechnologyEffects(
   // Phase 2: Appliquer les multiplications (multiply)
   for (const effect of applicableEffects) {
     if (effect.effectType === 'multiply') {
-      modifiedStats[effect.statKey] *= effect.value;
+      // Exclure attackSpeed et bonusDamage qui ne sont pas modifiables ici
+      if (effect.statKey === 'attackSpeed' || effect.statKey === 'bonusDamage') continue;
+      
+      (modifiedStats[effect.statKey] as number) *= effect.value;
+    }
+  }
+
+  // Phase 3: Appliquer les effets spéciaux (maxRange, attackSpeed, bonus damage)
+  
+  // Appliquer maxRange
+  for (const effect of specialEffects) {
+    if (effect.property === 'maxRange' && typeof modifiedStats.maxRange === 'number') {
+      if (effect.effectType === 'change') {
+        modifiedStats.maxRange += effect.value;
+      } else if (effect.effectType === 'multiply') {
+        modifiedStats.maxRange *= effect.value;
+      }
+    }
+  }
+  
+  // Appliquer attackSpeed
+  for (const effect of specialEffects) {
+    if (effect.property === 'attackSpeed' && typeof modifiedStats.attackSpeed === 'number') {
+      if (effect.effectType === 'change') {
+        modifiedStats.attackSpeed += effect.value;
+      } else if (effect.effectType === 'multiply') {
+        modifiedStats.attackSpeed *= effect.value;
+      }
+    }
+  }
+
+  // Appliquer les bonus de dégâts
+  if (modifiedStats.bonusDamage && Array.isArray(modifiedStats.bonusDamage)) {
+    for (const effect of specialEffects) {
+      if (effect.type === 'bonus' && effect.target?.class) {
+        // Chercher si un bonus contre cette cible existe déjà
+        const targetClasses = effect.target.class.flat();
+        const existingBonus = modifiedStats.bonusDamage.find((bonus: { classes?: string[] }) => {
+          if (!bonus.classes) return false;
+          return targetClasses.every(tc => 
+            bonus.classes?.some((bc: string) => bc.toLowerCase() === tc.toLowerCase())
+          );
+        });
+
+        if (existingBonus) {
+          // Modifier le bonus existant
+          if (effect.effectType === 'change') {
+            existingBonus.value += effect.value;
+          } else if (effect.effectType === 'multiply') {
+            existingBonus.value *= effect.value;
+          }
+        } else {
+          // Ajouter un nouveau bonus
+          if (effect.effectType === 'change') {
+            modifiedStats.bonusDamage.push({
+              value: effect.value,
+              classes: targetClasses
+            });
+          }
+        }
+      }
     }
   }
 
@@ -421,7 +610,14 @@ export function getActiveTechnologyVariationsWithTiers(
 
 // Catégoriser les technologies par type d'effet principal
 export function categorizeTechnology(tech: Technology): string {
-  const effects = tech.variations[0]?.effects || [];
+  // Utiliser les effects au niveau de la technologie (all-optimized_tec.json) ou au niveau de la variation
+  const effects = tech.effects || tech.variations[0]?.effects || [];
+  
+  // Si la technologie a plusieurs propriétés différentes, la mettre dans "Other"
+  const uniqueProperties = new Set(effects.map(e => e.property));
+  if (uniqueProperties.size > 1) {
+    return 'Other';
+  }
   
   // Vérifier si la tech fait partie d'une séquence à paliers (X/Y dans displayClasses)
   const tierInfo = getTechnologyTier(tech);
@@ -450,6 +646,12 @@ export function categorizeTechnology(tech: Technology): string {
     }
     if (effect.property === 'moveSpeed') {
       return isSeparateTech ? 'Speed-Unique' : 'Speed';
+    }
+    if (effect.property === 'maxRange') {
+      return isSeparateTech ? 'Range-Unique' : 'Range';
+    }
+    if (effect.property === 'attackSpeed') {
+      return isSeparateTech ? 'AttackSpeed-Unique' : 'AttackSpeed';
     }
   }
   

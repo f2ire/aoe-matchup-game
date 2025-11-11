@@ -1,4 +1,10 @@
 import { Technology, categorizeTechnology } from "@/data/unified-technologies";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 interface TechnologySelectorProps {
   technologies: Technology[];
@@ -23,6 +29,10 @@ export const TechnologySelector = ({
     'Attack-Melee-Unique', 'Attack-Ranged-Unique',
     'Armor-Melee', 'Armor-Ranged', 
     'Armor-Melee-Unique', 'Armor-Ranged-Unique',
+    'Range',
+    'Range-Unique',
+    'AttackSpeed',
+    'AttackSpeed-Unique',
     'Speed', 
     'Speed-Unique',
     'Other'
@@ -33,12 +43,16 @@ export const TechnologySelector = ({
     'Attack-Ranged': 'ATK',
     'Armor-Melee': 'ARM',
     'Armor-Ranged': 'ARM',
+    'Range': 'RNG',
+    'AttackSpeed': 'AS',
     'Speed': 'SPD',
     'HP-Unique': 'HP',
     'Attack-Melee-Unique': 'ATK',
     'Attack-Ranged-Unique': 'ATK',
     'Armor-Melee-Unique': 'ARM',
     'Armor-Ranged-Unique': 'ARM',
+    'Range-Unique': 'RNG',
+    'AttackSpeed-Unique': 'AS',
     'Speed-Unique': 'SPD',
     'Other': 'Other'
   };
@@ -95,30 +109,65 @@ export const TechnologySelector = ({
                     const isActive = activeTechnologies.has(tech.id);
                     const iconFileName = tech.icon.split('/').pop() || '';
                     const iconPath = `/technologies/${iconFileName}`;
+                    const isCompositeBows = tech.id === 'composite-bows';
 
                     return (
-                      <button
-                        key={tech.id}
-                        onClick={() => onToggle(tech.id)}
-                        title={tech.name}
-                        className={`
-                          w-12 h-12 rounded border-2 transition-all
-                          hover:scale-105 active:scale-95 overflow-hidden
-                          ${isActive 
-                            ? 'border-green-500 bg-green-500/10' 
-                            : 'border-border/50 bg-secondary/50 opacity-60'
-                          }
-                        `}
-                      >
-                        <img 
-                          src={iconPath}
-                          alt={tech.name}
-                          className="w-full h-full object-contain p-1"
-                          onError={(e) => {
-                            e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect width="48" height="48" fill="%23666"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-size="24" fill="white">?</text></svg>';
-                          }}
-                        />
-                      </button>
+                      <div key={tech.id} className="relative">
+                        <TooltipProvider delayDuration={750}>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={() => onToggle(tech.id)}
+                                className={`
+                                  w-12 h-12 rounded border-2 transition-all relative
+                                  hover:scale-105 active:scale-95 overflow-hidden
+                                  ${isActive 
+                                    ? 'border-green-500 bg-green-500/10' 
+                                    : 'border-border/50 bg-secondary/50 opacity-60'
+                                  }
+                                `}
+                              >
+                                <img 
+                                  src={iconPath}
+                                  alt={tech.name}
+                                  className="w-full h-full object-contain p-1"
+                                  onError={(e) => {
+                                    e.currentTarget.src = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48"><rect width="48" height="48" fill="%23666"/><text x="50%" y="50%" text-anchor="middle" dy=".3em" font-size="24" fill="white">?</text></svg>';
+                                  }}
+                                />
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom" className="max-w-xs">
+                              <p className="font-semibold">{tech.name}</p>
+                              {tech.description && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  {tech.description}
+                                </p>
+                              )}
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
+                        
+                        {isCompositeBows && (
+                          <TooltipProvider delayDuration={750}>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <span 
+                                  className="absolute top-0 right-0 text-[10px] font-bold text-yellow-500 bg-black/50 px-1 rounded-bl cursor-help z-10 pointer-events-auto"
+                                  onClick={(e) => e.stopPropagation()}
+                                >
+                                  *
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="right" className="max-w-xs z-50">
+                                <p className="text-xs text-yellow-400">
+                                  ⚠️ Known bug: The actual attack speed reduction is -30%, not -33% as shown in the tooltip.
+                                </p>
+                              </TooltipContent>
+                            </Tooltip>
+                          </TooltipProvider>
+                        )}
+                      </div>
                     );
                   })}
                 </div>

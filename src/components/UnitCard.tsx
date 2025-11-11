@@ -8,12 +8,18 @@ interface UnitCardProps {
   side?: "left" | "right";
   onClick?: () => void;
   className?: string;
+  isSelected?: boolean;
   // Stats de comparaison (unité adverse)
   compareHp?: number;
   compareAttack?: number;
   compareMeleeArmor?: number;
   compareRangedArmor?: number;
   compareSpeed?: number;
+  compareAttackSpeed?: number;
+  compareMaxRange?: number;
+  bonusDamage?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
+  compareBonusDamage?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
+  maxBonusDamageLines?: number; // Nombre maximum de lignes de bonus pour l'alignement
   compareCost?: number;
 }
 
@@ -23,11 +29,17 @@ export const UnitCard = ({
   side = "left", 
   onClick, 
   className,
+  isSelected = false,
   compareHp,
   compareAttack,
   compareMeleeArmor,
   compareRangedArmor,
   compareSpeed,
+  compareAttackSpeed,
+  compareMaxRange,
+  bonusDamage,
+  compareBonusDamage,
+  maxBonusDamageLines,
   compareCost
 }: UnitCardProps) => {
   // Utiliser la variation si disponible, sinon l'unité de base
@@ -49,11 +61,11 @@ export const UnitCard = ({
   const movement = 'movement' in displayData ? displayData.movement : undefined;
   
   // Fonction pour obtenir la classe de couleur selon la comparaison
-  const getComparisonColor = (myValue: number, compareValue?: number, higherIsBetter: boolean = true) => {
+  const getComparisonColor = (myValue: number, compareValue?: number, higherIsBetter: boolean = true, minDiff: number = 0.05, isAbsoluteThreshold: boolean = false) => {
     if (compareValue === undefined) return { color: "", symbol: "" };
     
-    const threshold = compareValue * 0.05; // 5% de différence
     const diff = myValue - compareValue;
+    const threshold = isAbsoluteThreshold ? minDiff : compareValue * minDiff;
     
     if (Math.abs(diff) <= threshold) return { color: "", symbol: "" }; // Différence négligeable
     
@@ -74,7 +86,7 @@ export const UnitCard = ({
 
   return (
     <Card
-      className={`p-6 border-2 border-border bg-card cursor-pointer hover:border-primary transition-all duration-300 ${className}`}
+      className={`p-6 border-2 border-border bg-card cursor-pointer hover:border-primary transition-all duration-300 group ${className}`}
       onClick={onClick}
     >
       <div className="flex flex-col items-center gap-4">
@@ -91,10 +103,23 @@ export const UnitCard = ({
           />
         </div>
         
-        <div className="flex items-center justify-center gap-2">
-          <h3 className="text-xl font-serif font-semibold text-foreground text-center">{name}</h3>
-          {isUnique && (
-            <span className="text-xs text-yellow-500">★</span>
+        <div className="flex flex-col items-center justify-center gap-1">
+          <h3 className={`text-xl font-serif text-foreground text-center transition-colors ${
+            isSelected 
+              ? 'font-bold' 
+              : 'font-semibold group-hover:text-black'
+          }`}>
+            {name}
+          </h3>
+          {displayData.displayClasses && displayData.displayClasses.length > 0 && (
+            <div className="flex items-center gap-1">
+              <p className="text-xs text-muted-foreground text-center">
+                {displayData.displayClasses[0]}
+              </p>
+              {isUnique && (
+                <span className="text-xs text-yellow-500">★</span>
+              )}
+            </div>
           )}
         </div>
         
@@ -117,6 +142,79 @@ export const UnitCard = ({
                   <span className="text-xs">{getComparisonColor(primaryWeapon.damage, compareAttack).symbol}</span>
                 )}
                 {Math.round(primaryWeapon.damage)} ({primaryWeapon.type})
+              </span>
+            </div>
+          )}
+          
+          {(bonusDamage && bonusDamage.length > 0) || maxBonusDamageLines > 0 ? (
+            <div className="pl-4 space-y-1">
+              {bonusDamage && bonusDamage.map((modifier: any, idx: number) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+                // Si c'est un bonus caché (pour l'alignement), afficher une ligne vide
+                if (modifier.hidden) {
+                  return (
+                    <div key={idx} className="flex justify-between text-xs h-4">
+                      <span className="text-transparent">-</span>
+                    </div>
+                  );
+                }
+                
+                const targetClasses = modifier.target?.class?.flat() || [];
+                const targetName = targetClasses.join(' ') || 'Unknown';
+                
+                // Trouver le bonus correspondant dans l'unité adverse (à la même position pour l'alignement)
+                const compareModifier = compareBonusDamage?.[idx];
+                
+                // Vérifier si c'est le même type de bonus (même cible)
+                let comparison = { color: "", symbol: "" };
+                if (compareModifier && !compareModifier.hidden) {
+                  const compareClasses = compareModifier.target?.class?.flat() || [];
+                  const isSameTarget = compareClasses.join(' ') === targetClasses.join(' ');
+                  
+                  // Afficher la comparaison seulement si c'est le même bonus
+                  if (isSameTarget) {
+                    comparison = getComparisonColor(modifier.value, compareModifier.value);
+                  }
+                }
+                
+                return (
+                  <div key={idx} className="flex justify-between text-xs">
+                    <span className={`flex items-center gap-1 ${comparison.color}`}>
+                      {comparison.symbol && (
+                        <span className="text-xs">{comparison.symbol}</span>
+                      )}
+                      <span className="text-muted-foreground">+{modifier.value} vs</span>
+                    </span>
+                    <span className="text-foreground capitalize">{targetName}</span>
+                  </div>
+                );
+              })}
+            </div>
+          ) : null}
+          
+          {primaryWeapon && primaryWeapon.range && (
+            <div className="pl-4 flex justify-between text-xs">
+              <span className="text-muted-foreground">Range:</span>
+              <span className="flex items-center gap-1">
+                {getComparisonColor(primaryWeapon.range.max, compareMaxRange, true, 0.5, true).symbol && (
+                  <span className={`text-xs ${getComparisonColor(primaryWeapon.range.max, compareMaxRange, true, 0.5, true).color}`}>
+                    {getComparisonColor(primaryWeapon.range.max, compareMaxRange, true, 0.5, true).symbol}
+                  </span>
+                )}
+                <span className="text-foreground">
+                  {primaryWeapon.range.min} - <span className={getComparisonColor(primaryWeapon.range.max, compareMaxRange, true, 0.5, true).color}>{primaryWeapon.range.max}</span>
+                </span>
+              </span>
+            </div>
+          )}
+          
+          {primaryWeapon && (
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Attack Speed:</span>
+              <span className={`flex items-center gap-1 ${getComparisonColor(primaryWeapon.speed, compareAttackSpeed, false).color}`}>
+                {getComparisonColor(primaryWeapon.speed, compareAttackSpeed, false).symbol && (
+                  <span className="text-xs">{getComparisonColor(primaryWeapon.speed, compareAttackSpeed, false).symbol}</span>
+                )}
+                {primaryWeapon.speed.toFixed(2)}s
               </span>
             </div>
           )}

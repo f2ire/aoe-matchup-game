@@ -241,7 +241,9 @@ const Sandbox = () => {
       rangedAttack: 0,
       meleeArmor: 0,
       rangedArmor: 0,
-      moveSpeed: 0
+      moveSpeed: 0,
+      attackSpeed: 0,
+      bonusDamage: []
     };
     
     const allyWeapon = getPrimaryWeapon(allyData);
@@ -253,7 +255,10 @@ const Sandbox = () => {
       rangedAttack: allyWeapon?.type === 'ranged' ? (allyWeapon.damage || 0) : 0,
       meleeArmor: getArmorValue(allyData, "melee"),
       rangedArmor: getArmorValue(allyData, "ranged"),
-      moveSpeed: 'movement' in allyData ? allyData.movement?.speed || 0 : 0
+      moveSpeed: 'movement' in allyData ? allyData.movement?.speed || 0 : 0,
+      attackSpeed: allyWeapon?.speed || 0,
+      maxRange: allyWeapon?.range?.max || 0,
+      bonusDamage: allyWeapon?.modifiers || []
     };
     
     // Obtenir les variations des technologies actives (incluant les paliers précédents automatiquement)
@@ -275,7 +280,9 @@ const Sandbox = () => {
       rangedAttack: 0,
       meleeArmor: 0,
       rangedArmor: 0,
-      moveSpeed: 0
+      moveSpeed: 0,
+      attackSpeed: 0,
+      bonusDamage: []
     };
     
     const enemyWeapon = getPrimaryWeapon(enemyData);
@@ -287,7 +294,10 @@ const Sandbox = () => {
       rangedAttack: enemyWeapon?.type === 'ranged' ? (enemyWeapon.damage || 0) : 0,
       meleeArmor: getArmorValue(enemyData, "melee"),
       rangedArmor: getArmorValue(enemyData, "ranged"),
-      moveSpeed: 'movement' in enemyData ? enemyData.movement?.speed || 0 : 0
+      moveSpeed: 'movement' in enemyData ? enemyData.movement?.speed || 0 : 0,
+      attackSpeed: enemyWeapon?.speed || 0,
+      maxRange: enemyWeapon?.range?.max || 0,
+      bonusDamage: enemyWeapon?.modifiers || []
     };
     
     // Obtenir les variations des technologies actives (incluant les paliers précédents automatiquement)
@@ -311,7 +321,13 @@ const Sandbox = () => {
     hitpoints: modifiedAllyStats.hitpoints,
     weapons: variationAlly.weapons.map(weapon => ({
       ...weapon,
-      damage: weapon.type === 'melee' ? modifiedAllyStats.meleeAttack : modifiedAllyStats.rangedAttack
+      damage: weapon.type === 'melee' ? modifiedAllyStats.meleeAttack : modifiedAllyStats.rangedAttack,
+      speed: modifiedAllyStats.attackSpeed,
+      range: weapon.range ? {
+        ...weapon.range,
+        max: modifiedAllyStats.maxRange || weapon.range.max
+      } : undefined,
+      modifiers: modifiedAllyStats.bonusDamage
     })),
     armor: [
       { type: 'melee', value: modifiedAllyStats.meleeArmor },
@@ -328,7 +344,13 @@ const Sandbox = () => {
     hitpoints: modifiedEnemyStats.hitpoints,
     weapons: variationEnemy.weapons.map(weapon => ({
       ...weapon,
-      damage: weapon.type === 'melee' ? modifiedEnemyStats.meleeAttack : modifiedEnemyStats.rangedAttack
+      damage: weapon.type === 'melee' ? modifiedEnemyStats.meleeAttack : modifiedEnemyStats.rangedAttack,
+      speed: modifiedEnemyStats.attackSpeed,
+      range: weapon.range ? {
+        ...weapon.range,
+        max: modifiedEnemyStats.maxRange || weapon.range.max
+      } : undefined,
+      modifiers: modifiedEnemyStats.bonusDamage
     })),
     armor: [
       { type: 'melee', value: modifiedEnemyStats.meleeArmor },
@@ -345,7 +367,13 @@ const Sandbox = () => {
     hitpoints: modifiedAllyStats.hitpoints,
     weapons: unit1.weapons.map(weapon => ({
       ...weapon,
-      damage: weapon.type === 'melee' ? modifiedAllyStats.meleeAttack : modifiedAllyStats.rangedAttack
+      damage: weapon.type === 'melee' ? modifiedAllyStats.meleeAttack : modifiedAllyStats.rangedAttack,
+      speed: modifiedAllyStats.attackSpeed,
+      range: weapon.range ? {
+        ...weapon.range,
+        max: modifiedAllyStats.maxRange || weapon.range.max
+      } : undefined,
+      modifiers: modifiedAllyStats.bonusDamage
     })),
     armor: [
       { type: 'melee', value: modifiedAllyStats.meleeArmor },
@@ -362,7 +390,13 @@ const Sandbox = () => {
     hitpoints: modifiedEnemyStats.hitpoints,
     weapons: unit2.weapons.map(weapon => ({
       ...weapon,
-      damage: weapon.type === 'melee' ? modifiedEnemyStats.meleeAttack : modifiedEnemyStats.rangedAttack
+      damage: weapon.type === 'melee' ? modifiedEnemyStats.meleeAttack : modifiedEnemyStats.rangedAttack,
+      speed: modifiedEnemyStats.attackSpeed,
+      range: weapon.range ? {
+        ...weapon.range,
+        max: modifiedEnemyStats.maxRange || weapon.range.max
+      } : undefined,
+      modifiers: modifiedEnemyStats.bonusDamage
     })),
     armor: [
       { type: 'melee', value: modifiedEnemyStats.meleeArmor },
@@ -381,6 +415,9 @@ const Sandbox = () => {
     meleeArmor: modifiedAllyStats.meleeArmor,
     rangedArmor: modifiedAllyStats.rangedArmor,
     speed: modifiedAllyStats.moveSpeed,
+    attackSpeed: modifiedAllyStats.attackSpeed || 0,
+    maxRange: modifiedAllyStats.maxRange || 0,
+    bonusDamage: modifiedAllyStats.bonusDamage || [],
     cost: variationAlly ? getTotalCostFromVariation(variationAlly) : (unit1 ? getTotalCost(unit1) : 0),
     costs: variationAlly ? variationAlly.costs : (unit1 ? unit1.costs : undefined)
   } : null;
@@ -391,10 +428,67 @@ const Sandbox = () => {
     meleeArmor: modifiedEnemyStats.meleeArmor,
     rangedArmor: modifiedEnemyStats.rangedArmor,
     speed: modifiedEnemyStats.moveSpeed,
+    attackSpeed: modifiedEnemyStats.attackSpeed || 0,
+    maxRange: modifiedEnemyStats.maxRange || 0,
+    bonusDamage: modifiedEnemyStats.bonusDamage || [],
     cost: variationEnemy ? getTotalCostFromVariation(variationEnemy) : (unit2 ? getTotalCost(unit2) : 0),
     costs: variationEnemy ? variationEnemy.costs : (unit2 ? unit2.costs : undefined)
   } : null;
 
+  // Créer des listes de bonus alignées pour chaque unité
+  // 1. D'abord les bonus communs (même cible)
+  // 2. Ensuite les bonus uniques de chaque côté
+  const allyBonuses = allyStats?.bonusDamage || [];
+  const enemyBonuses = enemyStats?.bonusDamage || [];
+  
+  const matchedTargets = new Set<string>();
+  const alignedAllyBonuses: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
+  const alignedEnemyBonuses: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
+  
+  // Phase 1: Ajouter les bonus communs (alignés)
+  allyBonuses.forEach((allyBonus: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    const allyTarget = allyBonus.target?.class?.flat().join(' ') || '';
+    const enemyBonus = enemyBonuses.find((b: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+      const enemyTarget = b.target?.class?.flat().join(' ') || '';
+      return enemyTarget === allyTarget;
+    });
+    
+    if (enemyBonus) {
+      matchedTargets.add(allyTarget);
+      alignedAllyBonuses.push(allyBonus);
+      alignedEnemyBonuses.push(enemyBonus);
+    }
+  });
+  
+  // Phase 2: Ajouter les bonus non-matchés
+  const unmatchedAlly = allyBonuses.filter((b: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    const target = b.target?.class?.flat().join(' ') || '';
+    return !matchedTargets.has(target);
+  });
+  
+  const unmatchedEnemy = enemyBonuses.filter((b: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+    const target = b.target?.class?.flat().join(' ') || '';
+    return !matchedTargets.has(target);
+  });
+  
+  // Ajouter les bonus non-matchés avec des lignes vides pour maintenir l'alignement
+  const maxUnmatched = Math.max(unmatchedAlly.length, unmatchedEnemy.length);
+  
+  for (let i = 0; i < maxUnmatched; i++) {
+    if (i < unmatchedAlly.length) {
+      alignedAllyBonuses.push(unmatchedAlly[i]);
+    } else {
+      alignedAllyBonuses.push({ hidden: true });
+    }
+    
+    if (i < unmatchedEnemy.length) {
+      alignedEnemyBonuses.push(unmatchedEnemy[i]);
+    } else {
+      alignedEnemyBonuses.push({ hidden: true });
+    }
+  }
+  
+  const maxBonusDamageLines = alignedAllyBonuses.length;
 
   // Si pas d'unités chargées, afficher un message
   if (!aoe4Units || aoe4Units.length === 0) {
@@ -453,19 +547,19 @@ const Sandbox = () => {
                 </SelectValue>
               </SelectTrigger>
               <SelectContent className="bg-popover border-border max-h-[400px]">
-                <SelectItem value="all" className="data-[state=checked]:text-primary-foreground py-3">
+                <SelectItem value="all" className="data-[state=checked]:font-bold py-3 group">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 flex items-center justify-center bg-muted rounded">
-                      <span className="text-xl">?</span>
+                      <span className="text-xl text-white group-hover:text-black transition-colors">?</span>
                     </div>
-                    <span className="font-medium">All Civilizations</span>
+                    <span className="font-medium text-white group-hover:text-black transition-colors">All Civilizations</span>
                   </div>
                 </SelectItem>
                 {CIVILIZATIONS.map((civ) => (
-                  <SelectItem key={civ.abbr} value={civ.abbr} className="data-[state=checked]:text-primary-foreground py-3">
+                  <SelectItem key={civ.abbr} value={civ.abbr} className="data-[state=checked]:font-bold py-3 group">
                     <div className="flex items-center gap-3">
                       <img src={civ.flagPath} alt={civ.name} className="w-8 h-8 object-contain" />
-                      <span className="font-medium">{civ.name}</span>
+                      <span className="font-medium text-white group-hover:text-black transition-colors">{civ.name}</span>
                     </div>
                   </SelectItem>
                 ))}
@@ -505,10 +599,10 @@ const Sandbox = () => {
                         </SelectLabel>
                       </div>
                       {isOpen && units.map((unit) => (
-                        <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:text-primary-foreground pl-8">
+                        <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-8 group">
                           <div className="flex items-center gap-2">
                             <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
-                            <span>{unit.name}</span>
+                            <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
                             {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
                           </div>
                         </SelectItem>
@@ -549,19 +643,19 @@ const Sandbox = () => {
                 </SelectValue>
               </SelectTrigger>
               <SelectContent className="bg-popover border-border max-h-[400px]">
-                <SelectItem value="all" className="data-[state=checked]:text-primary-foreground py-3">
+                <SelectItem value="all" className="data-[state=checked]:font-bold py-3 group">
                   <div className="flex items-center gap-3">
                     <div className="w-8 h-8 flex items-center justify-center bg-muted rounded">
-                      <span className="text-xl">?</span>
+                      <span className="text-xl text-white group-hover:text-black transition-colors">?</span>
                     </div>
-                    <span className="font-medium">All Civilizations</span>
+                    <span className="font-medium text-white group-hover:text-black transition-colors">All Civilizations</span>
                   </div>
                 </SelectItem>
                 {CIVILIZATIONS.map((civ) => (
-                  <SelectItem key={civ.abbr} value={civ.abbr} className="data-[state=checked]:text-primary-foreground py-3">
+                  <SelectItem key={civ.abbr} value={civ.abbr} className="data-[state=checked]:font-bold py-3 group">
                     <div className="flex items-center gap-3">
                       <img src={civ.flagPath} alt={civ.name} className="w-8 h-8 object-contain" />
-                      <span className="font-medium">{civ.name}</span>
+                      <span className="font-medium text-white group-hover:text-black transition-colors">{civ.name}</span>
                     </div>
                   </SelectItem>
                 ))}
@@ -601,10 +695,10 @@ const Sandbox = () => {
                         </SelectLabel>
                       </div>
                       {isOpen && units.map((unit) => (
-                        <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:text-primary-foreground pl-8">
+                        <SelectItem key={unit.id} value={unit.id} className="data-[state=checked]:font-bold pl-8 group">
                           <div className="flex items-center gap-2">
                             <img src={unit.icon} alt={unit.name} className="w-6 h-6 object-contain" />
-                            <span>{unit.name}</span>
+                            <span className="text-white group-hover:text-black transition-colors">{unit.name}</span>
                             {unit.unique && <span className="text-xs text-primary">(Unique)</span>}
                           </div>
                         </SelectItem>
@@ -653,11 +747,17 @@ const Sandbox = () => {
                       variation={modifiedVariationAlly}
                       unit={modifiedUnit1}
                       side="left"
+                      isSelected={true}
                       compareHp={enemyStats?.hp}
                       compareAttack={enemyStats?.attack}
                       compareMeleeArmor={enemyStats?.meleeArmor}
                       compareRangedArmor={enemyStats?.rangedArmor}
                       compareSpeed={enemyStats?.speed}
+                      compareAttackSpeed={enemyStats?.attackSpeed}
+                      compareMaxRange={enemyStats?.maxRange}
+                      bonusDamage={alignedAllyBonuses}
+                      compareBonusDamage={alignedEnemyBonuses}
+                      maxBonusDamageLines={maxBonusDamageLines}
                       compareCost={enemyStats?.cost}
                     />
                   </div>
@@ -681,11 +781,17 @@ const Sandbox = () => {
                       variation={modifiedVariationEnemy}
                       unit={modifiedUnit2}
                       side="right"
+                      isSelected={true}
                       compareHp={allyStats?.hp}
                       compareAttack={allyStats?.attack}
                       compareMeleeArmor={allyStats?.meleeArmor}
                       compareRangedArmor={allyStats?.rangedArmor}
                       compareSpeed={allyStats?.speed}
+                      compareAttackSpeed={allyStats?.attackSpeed}
+                      compareMaxRange={allyStats?.maxRange}
+                      bonusDamage={alignedEnemyBonuses}
+                      compareBonusDamage={alignedAllyBonuses}
+                      maxBonusDamageLines={maxBonusDamageLines}
                       compareCost={allyStats?.cost}
                     />
                   </div>
