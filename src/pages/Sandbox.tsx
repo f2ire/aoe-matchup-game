@@ -5,6 +5,7 @@ import type { UnifiedVariation } from "@/data/unified-units";
 import { getTechnologiesForUnit, getActiveTechnologyVariationsWithTiers, applyTechnologyEffects, getAllTiersFromSameLine, allTechnologies, type UnitStats } from "@/data/unified-technologies";
 import { CIVILIZATIONS, Civilization } from "@/data/civilizations";
 import { UnitCard } from "@/components/UnitCard";
+import { computeVersus, calculateEqualCostMultipliers, computeVersusAtEqualCost } from "@/lib/combat";
 import { AgeSelector } from "@/components/AgeSelector";
 import { TechnologySelector } from "@/components/TechnologySelector";
 import { Button } from "@/components/ui/button";
@@ -103,6 +104,8 @@ const categoryOrder = ['melee_infantry', 'ranged', 'cavalry', 'siege', 'monk', '
 
 const Sandbox = () => {
   const navigate = useNavigate();
+  const [isVersus, setIsVersus] = useState<boolean>(false); // toggle Versus vs Comparative
+  const [atEqualCost, setAtEqualCost] = useState<boolean>(false); // toggle At Equal Cost (versus only)
   
   // Filtres de civilisation indépendants
   const [selectedCivAlly, setSelectedCivAlly] = useState<string>("all");
@@ -511,16 +514,54 @@ const Sandbox = () => {
         animate={{ opacity: 1, y: 0 }}
         className="w-full max-w-6xl"
       >
-        <div className="text-center mb-8">
-          <h1 className="text-4xl font-serif font-bold text-primary mb-2">Sandbox Mode</h1>
-          <p className="text-muted-foreground text-lg">
-            Compare any two units from any civilizations !
-          </p>
+        <div className="text-center mb-8 space-y-4">
+          <div>
+            <h1 className="text-4xl font-serif font-bold text-primary mb-2">Sandbox Mode</h1>
+            <p className="text-muted-foreground text-lg">Compare any two units from any civilizations!</p>
+          </div>
+          {/* Mode Toggle */}
+          <div className="flex items-center justify-center gap-4">
+            <div className="inline-flex rounded-md border border-border overflow-hidden">
+              <button
+                type="button"
+                onClick={() => setIsVersus(false)}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  !isVersus ? 'bg-primary text-background' : 'bg-card text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Comparative
+              </button>
+              <div className="w-px bg-border" />
+              <button
+                type="button"
+                onClick={() => setIsVersus(true)}
+                className={`px-4 py-2 text-sm font-medium transition-colors ${
+                  isVersus ? 'bg-primary text-background' : 'bg-card text-muted-foreground hover:text-foreground'
+                }`}
+              >
+                Versus
+              </button>
+            </div>
+            {isVersus && (
+              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-md border border-border bg-card">
+                <input
+                  type="checkbox"
+                  id="atEqualCost"
+                  checked={atEqualCost}
+                  onChange={(e) => setAtEqualCost(e.target.checked)}
+                  className="w-4 h-4 rounded border-border"
+                />
+                <label htmlFor="atEqualCost" className="text-sm font-medium cursor-pointer">
+                  At Equal Cost
+                </label>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="grid md:grid-cols-2 gap-8 mb-8">
           {/* Colonne Alliée */}
-          <div className="space-y-4">
+          <div className="space-y-4 flex flex-col items-center md:items-end">
             <label className="text-sm font-medium text-foreground">Civilization (Ally):</label>
             <Select value={selectedCivAlly} onValueChange={setSelectedCivAlly}>
               <SelectTrigger className="bg-secondary border-border h-14">
@@ -616,7 +657,7 @@ const Sandbox = () => {
           </div>
 
           {/* Colonne Ennemie */}
-          <div className="space-y-4">
+          <div className="space-y-4 flex flex-col items-center md:items-start">
             <label className="text-sm font-medium text-foreground">Civilization (Enemy):</label>
             <Select value={selectedCivEnemy} onValueChange={setSelectedCivEnemy}>
               <SelectTrigger className="bg-secondary border-border h-14">
@@ -712,23 +753,21 @@ const Sandbox = () => {
           </div>
         </div>
 
-        <div className="grid md:grid-cols-2 gap-8 mt-12">
-          {/* Ally Unit avec sélecteur d'âge à gauche */}
-          <motion.div
-            initial={{ opacity: 0, x: -50 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.3 }}
-            className="flex items-start gap-4"
-          >
-            {unit1 && (
-              <>
+        {/* Zone de comparaison / versus */}
+        {!isVersus && (
+          <div className="grid md:grid-cols-2 gap-8 mt-12">
+            {/* Ally Unit */}
+              <motion.div
+                initial={{ opacity: 0, x: -50 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.3 }}
+                className="flex items-start gap-4 justify-center"
+              >
+              {unit1 && (
                 <div className="flex items-start gap-4">
                   <div className="flex-shrink-0 space-y-3">
                     <AgeSelector
-                      availableAges={getAvailableAges(
-                        unit1.id,
-                        selectedCivAlly
-                      )}
+                      availableAges={getAvailableAges(unit1.id, selectedCivAlly)}
                       selectedAge={selectedAgeAlly}
                       onAgeChange={setSelectedAgeAlly}
                       orientation="left"
@@ -742,8 +781,9 @@ const Sandbox = () => {
                       orientation="left"
                     />
                   </div>
-                  <div className="flex-1">
-                    <UnitCard 
+                  <div className="flex-1 min-w-0 flex justify-end">
+                    <UnitCard
+                      className="w-[260px]"
                       variation={modifiedVariationAlly}
                       unit={modifiedUnit1}
                       side="left"
@@ -762,22 +802,20 @@ const Sandbox = () => {
                     />
                   </div>
                 </div>
-              </>
-            )}
-          </motion.div>
-
-          {/* Enemy Unit avec sélecteur d'âge à droite */}
-          <motion.div
-            initial={{ opacity: 0, x: 50 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.3 }}
-            className="flex items-start gap-4"
-          >
-            {unit2 && (
-              <>
+              )}
+            </motion.div>
+            {/* Enemy Unit */}
+            <motion.div
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3 }}
+              className="flex items-start gap-4 justify-center"
+            >
+              {unit2 && (
                 <div className="flex items-start gap-4">
-                  <div className="flex-1">
-                    <UnitCard 
+                  <div className="flex-1 min-w-0 flex justify-start">
+                    <UnitCard
+                      className="w-[260px]"
                       variation={modifiedVariationEnemy}
                       unit={modifiedUnit2}
                       side="right"
@@ -797,10 +835,7 @@ const Sandbox = () => {
                   </div>
                   <div className="flex-shrink-0 space-y-3">
                     <AgeSelector
-                      availableAges={getAvailableAges(
-                        unit2.id,
-                        selectedCivEnemy
-                      )}
+                      availableAges={getAvailableAges(unit2.id, selectedCivEnemy)}
                       selectedAge={selectedAgeEnemy}
                       onAgeChange={setSelectedAgeEnemy}
                       orientation="right"
@@ -815,10 +850,154 @@ const Sandbox = () => {
                     />
                   </div>
                 </div>
-              </>
-            )}
-          </motion.div>
-        </div>
+              )}
+            </motion.div>
+          </div>
+        )}
+        {isVersus && (
+          <div className="grid md:grid-cols-2 gap-8 mt-12">
+            {(() => {
+              if (!unit1 || !unit2) return null;
+              
+              let versusData;
+              let multipliers = undefined;
+              
+              if (atEqualCost) {
+                const result = computeVersusAtEqualCost(modifiedVariationAlly || modifiedUnit1!, modifiedVariationEnemy || modifiedUnit2!);
+                versusData = result;
+                multipliers = result.multipliers;
+              } else {
+                versusData = computeVersus(modifiedVariationAlly || modifiedUnit1!, modifiedVariationEnemy || modifiedUnit2!);
+              }
+              
+              const isDraw = versusData.winner === 'draw';
+              const leftIsWinner = !isDraw && versusData.winner === versusData.attacker.id;
+              const rightIsWinner = !isDraw && versusData.winner === versusData.defender.id;
+              const leftMetrics = {
+                dps: versusData.attacker.dps,
+                dpsPerCost: versusData.attacker.dpsPerCost,
+                hitsToKill: versusData.attacker.hitsToKill,
+                timeToKill: versusData.attacker.timeToKill,
+                effectiveDamagePerHit: versusData.attacker.effectiveDamagePerHit,
+                bugAttackSpeed: versusData.attacker.bugAttackSpeed,
+                formula: versusData.attacker.formula,
+                isWinner: leftIsWinner,
+                isLoser: !leftIsWinner && !isDraw,
+                isDraw,
+                opponentClasses: (modifiedVariationEnemy || modifiedUnit2)?.classes ?? unit2?.classes ?? [],
+                opponentDps: versusData.defender.dps,
+                opponentDpsPerCost: versusData.defender.dpsPerCost,
+                opponentHitsToKill: versusData.defender.hitsToKill,
+                opponentTimeToKill: versusData.defender.timeToKill,
+                multiplier: multipliers?.multA,
+                totalCost: multipliers?.totalCostA,
+                opponentMultiplier: multipliers?.multB,
+                opponentTotalCost: multipliers?.totalCostB,
+                winnerHpRemaining: leftIsWinner ? versusData.winnerHpRemaining : undefined,
+                winnerUnitsRemaining: leftIsWinner ? versusData.winnerUnitsRemaining : undefined,
+                resourceDifference: leftIsWinner ? versusData.resourceDifference : undefined
+              };
+              const rightMetrics = {
+                dps: versusData.defender.dps,
+                dpsPerCost: versusData.defender.dpsPerCost,
+                hitsToKill: versusData.defender.hitsToKill,
+                timeToKill: versusData.defender.timeToKill,
+                effectiveDamagePerHit: versusData.defender.effectiveDamagePerHit,
+                bugAttackSpeed: versusData.defender.bugAttackSpeed,
+                formula: versusData.defender.formula,
+                isWinner: rightIsWinner,
+                isLoser: !rightIsWinner && !isDraw,
+                isDraw,
+                opponentClasses: (modifiedVariationAlly || modifiedUnit1)?.classes ?? unit1?.classes ?? [],
+                opponentDps: versusData.attacker.dps,
+                opponentDpsPerCost: versusData.attacker.dpsPerCost,
+                opponentHitsToKill: versusData.attacker.hitsToKill,
+                opponentTimeToKill: versusData.attacker.timeToKill,
+                multiplier: multipliers?.multB,
+                totalCost: multipliers?.totalCostB,
+                opponentMultiplier: multipliers?.multA,
+                opponentTotalCost: multipliers?.totalCostA,
+                winnerHpRemaining: rightIsWinner ? versusData.winnerHpRemaining : undefined,
+                winnerUnitsRemaining: rightIsWinner ? versusData.winnerUnitsRemaining : undefined,
+                resourceDifference: rightIsWinner ? versusData.resourceDifference : undefined
+              };
+              return (
+                <>
+                  <motion.div
+                    initial={{ opacity: 0, x: -50 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="flex items-start gap-4 justify-center"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="flex-shrink-0 space-y-3">
+                        <AgeSelector
+                          availableAges={getAvailableAges(unit1.id, selectedCivAlly)}
+                          selectedAge={selectedAgeAlly}
+                          onAgeChange={setSelectedAgeAlly}
+                          orientation="left"
+                        />
+                        <TechnologySelector
+                          technologies={techsAlly}
+                          activeTechnologies={activeTechnologiesAlly}
+                          onToggle={(techId) => {
+                            handleTieredTechnologyToggle(techId, activeTechnologiesAlly, setActiveTechnologiesAlly);
+                          }}
+                          orientation="left"
+                        />
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <UnitCard
+                          className="w-[260px]"
+                          variation={modifiedVariationAlly}
+                          unit={modifiedUnit1}
+                          side="left"
+                          mode="versus"
+                          versusMetrics={leftMetrics}
+                        />
+                      </div>
+                    </div>
+                  </motion.div>
+                  <motion.div
+                    initial={{ opacity: 0, x: 50 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ duration: 0.3 }}
+                    className="flex items-start gap-4 justify-center"
+                  >
+                    <div className="flex items-start gap-4">
+                      <div className="flex-1 min-w-0">
+                        <UnitCard
+                          className="w-[260px]"
+                          variation={modifiedVariationEnemy}
+                          unit={modifiedUnit2}
+                          side="right"
+                          mode="versus"
+                          versusMetrics={rightMetrics}
+                        />
+                      </div>
+                      <div className="flex-shrink-0 space-y-3">
+                        <AgeSelector
+                          availableAges={getAvailableAges(unit2.id, selectedCivEnemy)}
+                          selectedAge={selectedAgeEnemy}
+                          onAgeChange={setSelectedAgeEnemy}
+                          orientation="right"
+                        />
+                        <TechnologySelector
+                          technologies={techsEnemy}
+                          activeTechnologies={activeTechnologiesEnemy}
+                          onToggle={(techId) => {
+                            handleTieredTechnologyToggle(techId, activeTechnologiesEnemy, setActiveTechnologiesEnemy);
+                          }}
+                          orientation="right"
+                        />
+                      </div>
+                    </div>
+                  </motion.div>
+                </>
+              );
+            })()}
+          </div>
+        )}
 
         <div className="text-center mt-8">
           <Button variant="secondary" onClick={() => navigate("/")}>
