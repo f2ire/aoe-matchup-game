@@ -3,11 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { aoe4Units, AoE4Unit, getUnitVariation, getAvailableAges, getMaxAge, getPrimaryWeapon, getArmorValue, getTotalCost, getTotalCostFromVariation } from "@/data/unified-units";
 import type { UnifiedVariation } from "@/data/unified-units";
 import { getTechnologiesForUnit, getActiveTechnologyVariationsWithTiers, applyTechnologyEffects, getAllTiersFromSameLine, allTechnologies, type UnitStats } from "@/data/unified-technologies";
+import { getAbilitiesForUnit, getActiveAbilityVariations } from "@/data/unified-abilities";
+import type { Ability, AbilityVariation } from "@/data/unified-abilities";
 import { CIVILIZATIONS, Civilization } from "@/data/civilizations";
 import { UnitCard } from "@/components/UnitCard";
 import { computeVersus, calculateEqualCostMultipliers, computeVersusAtEqualCost } from "@/lib/combat";
 import { AgeSelector } from "@/components/AgeSelector";
 import { TechnologySelector } from "@/components/TechnologySelector";
+import { AbilitySelector } from "@/components/AbilitySelector";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel } from "@/components/ui/select";
 import { motion } from "framer-motion";
@@ -207,12 +210,17 @@ const Sandbox = () => {
   const [activeTechnologiesAlly, setActiveTechnologiesAlly] = useState<Set<string>>(new Set());
   const [activeTechnologiesEnemy, setActiveTechnologiesEnemy] = useState<Set<string>>(new Set());
   
+  // Abilities actives
+  const [activeAbilitiesAlly, setActiveAbilitiesAlly] = useState<Set<string>>(new Set());
+  const [activeAbilitiesEnemy, setActiveAbilitiesEnemy] = useState<Set<string>>(new Set());
+  
   // Si la civilisation change et que l'unité sélectionnée n'est pas disponible, réinitialiser (Allié)
   useEffect(() => {
     if (unit1 && !isUnitAvailableForCiv(unit1, selectedCivAlly)) {
       setUnit1(null);
       setVariationAlly(null);
       setActiveTechnologiesAlly(new Set());
+      setActiveAbilitiesAlly(new Set());
     }
   }, [selectedCivAlly, unit1]);
   
@@ -222,6 +230,7 @@ const Sandbox = () => {
       setUnit2(null);
       setVariationEnemy(null);
       setActiveTechnologiesEnemy(new Set());
+      setActiveAbilitiesEnemy(new Set());
     }
   }, [selectedCivEnemy, unit2]);
   
@@ -260,6 +269,46 @@ const Sandbox = () => {
   // Calculer les technologies disponibles
   const techsAlly = unit1 ? getTechnologiesForUnit(unit1.classes, selectedCivAlly, selectedAgeAlly, unit1.id) : [];
   const techsEnemy = unit2 ? getTechnologiesForUnit(unit2.classes, selectedCivEnemy, selectedAgeEnemy, unit2.id) : [];
+
+  // Calculer les abilities disponibles (memoisées pour stabilité des dépendances)
+  const abilitiesAlly = useMemo<Ability[]>(() => {
+    return unit1 ? getAbilitiesForUnit(unit1.classes, selectedCivAlly, selectedAgeAlly, unit1.id) : [];
+  }, [unit1, selectedCivAlly, selectedAgeAlly]);
+
+  const abilitiesEnemy = useMemo<Ability[]>(() => {
+    return unit2 ? getAbilitiesForUnit(unit2.classes, selectedCivEnemy, selectedAgeEnemy, unit2.id) : [];
+  }, [unit2, selectedCivEnemy, selectedAgeEnemy]);
+
+  // Ajouter automatiquement aux sets les abilities dont active === 'always' (mais permettre de les désactiver)
+  useEffect(() => {
+    if (!unit1) return;
+    const defaults = abilitiesAlly
+      .filter(a => a.active === 'always' || a.variations?.some((v: AbilityVariation) => v.active === 'always'))
+      .map(a => a.id);
+    if (defaults.length === 0) return;
+    // N'ajouter les defaults que si l'utilisateur n'a encore rien sélectionné
+    setActiveAbilitiesAlly(prev => {
+      if (prev.size > 0) return prev; // l'utilisateur a déjà choisi, ne pas écraser
+      const merged = new Set(prev);
+      for (const id of defaults) merged.add(id);
+      return merged;
+    });
+  }, [unit1, selectedCivAlly, selectedAgeAlly, abilitiesAlly]);
+
+  useEffect(() => {
+    if (!unit2) return;
+    const defaults = abilitiesEnemy
+      .filter(a => a.active === 'always' || a.variations?.some((v: AbilityVariation) => v.active === 'always'))
+      .map(a => a.id);
+    if (defaults.length === 0) return;
+    // N'ajouter les defaults que si l'utilisateur n'a encore rien sélectionné
+    setActiveAbilitiesEnemy(prev => {
+      if (prev.size > 0) return prev;
+      const merged = new Set(prev);
+      for (const id of defaults) merged.add(id);
+      return merged;
+    });
+  }, [unit2, selectedCivEnemy, selectedAgeEnemy, abilitiesEnemy]);
   
   // Calculer les stats modifiées avec useMemo pour forcer le recalcul complet à chaque changement
   const modifiedAllyStats = useMemo(() => {
@@ -297,9 +346,17 @@ const Sandbox = () => {
       selectedAgeAlly
     );
     
-    // Appliquer les technologies depuis zéro
-    return applyTechnologyEffects(baseStats, unit1?.classes || [], techVariations, unit1?.id);
-  }, [unit1, variationAlly, activeTechnologiesAlly, selectedCivAlly, selectedAgeAlly]);
+    // Obtenir les variations des abilities actives
+    const abilityVariations = getActiveAbilityVariations(
+      activeAbilitiesAlly,
+      selectedCivAlly,
+      selectedAgeAlly
+    );
+    
+    // Appliquer les technologies + abilities depuis zéro
+    const withTechs = applyTechnologyEffects(baseStats, unit1?.classes || [], techVariations, unit1?.id);
+    return applyTechnologyEffects(withTechs, unit1?.classes || [], abilityVariations, unit1?.id);
+  }, [unit1, variationAlly, activeTechnologiesAlly, activeAbilitiesAlly, selectedCivAlly, selectedAgeAlly]);
   
   const modifiedEnemyStats = useMemo(() => {
     const enemyData = variationEnemy || unit2;
@@ -336,9 +393,17 @@ const Sandbox = () => {
       selectedAgeEnemy
     );
     
-    // Appliquer les technologies depuis zéro
-    return applyTechnologyEffects(baseStats, unit2?.classes || [], techVariations, unit2?.id);
-  }, [unit2, variationEnemy, activeTechnologiesEnemy, selectedCivEnemy, selectedAgeEnemy]);
+    // Obtenir les variations des abilities actives
+    const abilityVariations = getActiveAbilityVariations(
+      activeAbilitiesEnemy,
+      selectedCivEnemy,
+      selectedAgeEnemy
+    );
+    
+    // Appliquer les technologies + abilities depuis zéro
+    const withTechs = applyTechnologyEffects(baseStats, unit2?.classes || [], techVariations, unit2?.id);
+    return applyTechnologyEffects(withTechs, unit2?.classes || [], abilityVariations, unit2?.id);
+  }, [unit2, variationEnemy, activeTechnologiesEnemy, activeAbilitiesEnemy, selectedCivEnemy, selectedAgeEnemy]);
   
   // Calculer les stats pour la comparaison
   const allyData = variationAlly || unit1;
@@ -806,6 +871,20 @@ const Sandbox = () => {
                       }}
                       orientation="left"
                     />
+                    <AbilitySelector
+                      abilities={abilitiesAlly}
+                      activeAbilities={activeAbilitiesAlly}
+                      onToggle={(abilityId) => {
+                        const newSet = new Set(activeAbilitiesAlly);
+                        if (newSet.has(abilityId)) {
+                          newSet.delete(abilityId);
+                        } else {
+                          newSet.add(abilityId);
+                        }
+                        setActiveAbilitiesAlly(newSet);
+                      }}
+                      orientation="left"
+                    />
                   </div>
                   <div className="flex-1 min-w-0 flex justify-end">
                     <UnitCard
@@ -873,6 +952,20 @@ const Sandbox = () => {
                       onToggle={(techId) => {
                         handleTieredTechnologyToggle(techId, activeTechnologiesEnemy, setActiveTechnologiesEnemy);
                       }}
+                    />
+                    <AbilitySelector
+                      abilities={abilitiesEnemy}
+                      activeAbilities={activeAbilitiesEnemy}
+                      onToggle={(abilityId) => {
+                        const newSet = new Set(activeAbilitiesEnemy);
+                        if (newSet.has(abilityId)) {
+                          newSet.delete(abilityId);
+                        } else {
+                          newSet.add(abilityId);
+                        }
+                        setActiveAbilitiesEnemy(newSet);
+                      }}
+                      orientation="right"
                     />
                   </div>
                 </div>
@@ -971,6 +1064,20 @@ const Sandbox = () => {
                           }}
                           orientation="left"
                         />
+                        <AbilitySelector
+                          abilities={abilitiesAlly}
+                          activeAbilities={activeAbilitiesAlly}
+                          onToggle={(abilityId) => {
+                            const newSet = new Set(activeAbilitiesAlly);
+                            if (newSet.has(abilityId)) {
+                              newSet.delete(abilityId);
+                            } else {
+                              newSet.add(abilityId);
+                            }
+                            setActiveAbilitiesAlly(newSet);
+                          }}
+                          orientation="left"
+                        />
                       </div>
                       <div className="flex-1 min-w-0">
                         <UnitCard
@@ -1013,6 +1120,20 @@ const Sandbox = () => {
                           activeTechnologies={activeTechnologiesEnemy}
                           onToggle={(techId) => {
                             handleTieredTechnologyToggle(techId, activeTechnologiesEnemy, setActiveTechnologiesEnemy);
+                          }}
+                          orientation="right"
+                        />
+                        <AbilitySelector
+                          abilities={abilitiesEnemy}
+                          activeAbilities={activeAbilitiesEnemy}
+                          onToggle={(abilityId) => {
+                            const newSet = new Set(activeAbilitiesEnemy);
+                            if (newSet.has(abilityId)) {
+                              newSet.delete(abilityId);
+                            } else {
+                              newSet.add(abilityId);
+                            }
+                            setActiveAbilitiesEnemy(newSet);
                           }}
                           orientation="right"
                         />

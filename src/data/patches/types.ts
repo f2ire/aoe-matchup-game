@@ -32,6 +32,8 @@ export interface TechVariationMatch {
 export interface TechVariationPatch<TechnologyVariation> {
   match: TechVariationMatch;
   update: DeepPartial<TechnologyVariation>;
+  // Optionally attach a small UI hint (tooltip) to this variation patch
+  uiTooltip?: string;
 }
 
 export interface TechnologyPatch<Technology, TechnologyVariation> {
@@ -39,6 +41,8 @@ export interface TechnologyPatch<Technology, TechnologyVariation> {
   update?: DeepPartial<Technology>;
   variations?: TechVariationPatch<TechnologyVariation>[];
   after?: (tech: Technology) => Technology;
+  // Optionally attach a UI tooltip at the technology level
+  uiTooltip?: string;
 }
 
 // Petit utilitaire deep-merge (non mutatif)

@@ -38,6 +38,7 @@ export interface TechnologyVariation {
     time: number;
   };
   producedBy?: string[];
+  unlockedBy?: string[];
   icon?: string;
   effects?: TechnologyEffect[];
 }
@@ -615,20 +616,44 @@ export function categorizeTechnology(tech: Technology): string {
   // Utiliser les effects au niveau de la technologie (all-optimized_tec.json) ou au niveau de la variation
   const effects = tech.effects || tech.variations[0]?.effects || [];
   
-  // Si la technologie a plusieurs propriétés différentes, la mettre dans "Other"
-  const uniqueProperties = new Set(effects.map(e => e.property));
-  if (uniqueProperties.size > 1) {
-    return 'Other';
-  }
-  
   // Vérifier si la tech fait partie d'une séquence à paliers (X/Y dans displayClasses)
   const tierInfo = getTechnologyTier(tech);
   const hasTier = !!tierInfo;
-  
+
   // Une tech est sur une ligne séparée si:
   // - Elle est unique: true OU
   // - Elle n'a pas de palier (pas de X/Y) et est unique: false (standalone)
   const isSeparateTech = tech.unique || !hasTier;
+
+  // Si la technologie a plusieurs propriétés différentes, la mettre dans "Other"
+  const uniqueProperties = new Set(effects.map(e => e.property));
+  
+  // Si la techno fait partie d'une famille X/Y, utiliser la catégorie du premier palier
+  // pour assurer que toute la famille reste dans la même catégorie
+  if (hasTier && tierInfo.tier > 1) {
+    const baseName = getTechnologyBaseName(tech.displayClasses[0]);
+    const firstTier = allTechnologies.find(t => 
+      t.displayClasses[0] === `${baseName} 1/${tierInfo.maxTier}`
+    );
+    if (firstTier) {
+      return categorizeTechnology(firstTier);
+    }
+  }
+  
+  // Si la techno n'affecte que des propriétés d'armure (meleeArmor et/ou rangedArmor),
+  // la catégoriser dans Armor (plutôt que Other). On choisit Armor-Ranged si rangedArmor
+  // est présent, sinon Armor-Melee.
+  const armorProps = new Set(['meleeArmor', 'rangedArmor']);
+  const allArmor = [...uniqueProperties].every(p => armorProps.has(p));
+  if (allArmor) {
+    return isSeparateTech
+      ? (uniqueProperties.has('rangedArmor') ? 'Armor-Ranged-Unique' : 'Armor-Melee-Unique')
+      : (uniqueProperties.has('rangedArmor') ? 'Armor-Ranged' : 'Armor-Melee');
+  }
+
+  if (uniqueProperties.size > 1) {
+    return 'Other';
+  }
   
   for (const effect of effects) {
     if (effect.property === 'hitpoints') {

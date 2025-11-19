@@ -1,4 +1,5 @@
-import { Technology, categorizeTechnology } from "@/data/unified-technologies";
+import { Technology, categorizeTechnology, getTechnologyTier, getTechnologyBaseName } from "@/data/unified-technologies";
+import { technologyPatches } from "@/data/patches/technologies";
 import {
   Tooltip,
   TooltipContent,
@@ -57,51 +58,73 @@ export const TechnologySelector = ({
     'Other': 'Other'
   };
 
-  // Structure: category -> age -> technologies[]
-  const grouped: Record<string, Record<number, Technology[]>> = {};
+  // Structure: category -> lineKey -> age -> technologies[]
+  const grouped: Record<string, Record<string, Record<number, Technology[]>>> = {};
   
   categories.forEach(cat => {
-    grouped[cat] = { 1: [], 2: [], 3: [], 4: [] };
+    grouped[cat] = {};
   });
 
   technologies.forEach(tech => {
     const category = categorizeTechnology(tech);
     const age = tech.minAge;
     
-    if (age >= 1 && age <= 4 && grouped[category]) {
-      grouped[category][age].push(tech);
+    if (age < 1 || age > 4 || !grouped[category]) return;
+
+    const tierInfo = getTechnologyTier(tech);
+    let lineKey: string;
+
+    if (tierInfo) {
+      const baseName = getTechnologyBaseName(tech.displayClasses[0]);
+      lineKey = `family:${baseName}`;
+    } else {
+      lineKey = category;
     }
+
+    if (!grouped[category][lineKey]) {
+      grouped[category][lineKey] = { 1: [], 2: [], 3: [], 4: [] };
+    }
+    grouped[category][lineKey][age].push(tech);
   });
 
   const ages = [1, 2, 3, 4];
   
   // Tracker pour savoir quelle est la première ligne de chaque groupe (HP, ATK, ARM, SPD)
-  const firstLineOfGroup = new Map<string, string>();
+  const firstLineOfGroup = new Map<string, { category: string; lineKey: string }>();
   
   // Pré-calculer quelle est la première ligne visible de chaque groupe
   categories.forEach(category => {
-    const categoryTechs = grouped[category];
-    const hasAnyTech = ages.some(age => categoryTechs[age].length > 0);
-    if (!hasAnyTech) return;
+    const categoryLines = grouped[category];
+    const lineKeys = Object.keys(categoryLines);
     
-    const baseLabel = categoryLabels[category];
-    if (!firstLineOfGroup.has(baseLabel)) {
-      firstLineOfGroup.set(baseLabel, category);
+    for (const lineKey of lineKeys) {
+      const lineTechs = categoryLines[lineKey];
+      const hasAnyTech = ages.some(age => lineTechs[age].length > 0);
+      if (!hasAnyTech) continue;
+      
+      const baseLabel = categoryLabels[category];
+      if (!firstLineOfGroup.has(baseLabel)) {
+        firstLineOfGroup.set(baseLabel, { category, lineKey });
+        break;
+      }
     }
   });
   
   return (
     <div className="space-y-2 mt-2">
       {categories.map(category => {
-        const categoryTechs = grouped[category];
-        // Vérifier si cette catégorie a des technologies
-        const hasAnyTech = ages.some(age => categoryTechs[age].length > 0);
-        if (!hasAnyTech) return null;
+        const categoryLines = grouped[category];
+        const lineKeys = Object.keys(categoryLines);
+        
+        return lineKeys.map((lineKey, lineIndex) => {
+          const lineTechs = categoryLines[lineKey];
+          const hasAnyTech = ages.some(age => lineTechs[age].length > 0);
+          if (!hasAnyTech) return null;
 
-        const techGrid = (
-          <div className="flex gap-2">
-            {ages.map(age => {
-              const techs = categoryTechs[age];
+          const techGrid = (
+            <div className="flex gap-2">
+              {ages.map(age => {
+                const techs = lineTechs[age];
               
               return (
                 <div key={age} className="w-12 flex flex-col gap-2">
@@ -109,8 +132,8 @@ export const TechnologySelector = ({
                     const isActive = activeTechnologies.has(tech.id);
                     const iconFileName = tech.icon.split('/').pop() || '';
                     const iconPath = `/technologies/${iconFileName}`;
-                    const isCompositeBows = tech.id === 'composite-bows';
-
+                    const patch = technologyPatches.find(p => p.id === tech.id);
+                    const patchTooltip = patch?.uiTooltip || patch?.variations?.find(vp => vp.uiTooltip)?.uiTooltip;
                     return (
                       <div key={tech.id} className="relative">
                         <TooltipProvider delayDuration={750}>
@@ -148,7 +171,7 @@ export const TechnologySelector = ({
                           </Tooltip>
                         </TooltipProvider>
                         
-                        {isCompositeBows && (
+                        {patchTooltip && (
                           <TooltipProvider delayDuration={750}>
                             <Tooltip>
                               <TooltipTrigger asChild>
@@ -161,7 +184,7 @@ export const TechnologySelector = ({
                               </TooltipTrigger>
                               <TooltipContent side="right" className="max-w-xs z-50">
                                 <p className="text-xs text-yellow-400">
-                                  ⚠️ Known bug: The actual attack speed reduction is -30%, not -33% as shown in the tooltip.
+                                  {patchTooltip}
                                 </p>
                               </TooltipContent>
                             </Tooltip>
@@ -176,18 +199,19 @@ export const TechnologySelector = ({
           </div>
         );
 
-        // Afficher le label seulement sur la première ligne de chaque groupe
-        const baseLabel = categoryLabels[category];
-        const isFirstLineOfGroup = firstLineOfGroup.get(baseLabel) === category;
+          // Afficher le label seulement sur la première ligne de chaque groupe
+          const baseLabel = categoryLabels[category];
+          const firstLine = firstLineOfGroup.get(baseLabel);
+          const isFirstLineOfGroup = firstLine?.category === category && firstLine?.lineKey === lineKey;
 
-        const label = (
-          <div className="text-xs font-medium text-muted-foreground w-10 flex-shrink-0 pt-2">
-            {isFirstLineOfGroup ? `${baseLabel}:` : ''}
-          </div>
-        );
+          const label = (
+            <div className="text-xs font-medium text-muted-foreground w-10 flex-shrink-0 pt-2">
+              {isFirstLineOfGroup ? `${baseLabel}:` : ''}
+            </div>
+          );
 
-        return (
-          <div key={category} className="flex items-start gap-2">
+          return (
+            <div key={`${category}-${lineKey}`} className="flex items-start gap-2">
             {orientation === "left" ? (
               <>
                 {label}
@@ -199,8 +223,9 @@ export const TechnologySelector = ({
                 {label}
               </>
             )}
-          </div>
-        );
+            </div>
+          );
+        });
       })}
     </div>
   );

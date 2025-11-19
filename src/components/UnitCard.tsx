@@ -223,7 +223,7 @@ export const UnitCard = ({
                 <span className="text-muted-foreground">Attack Speed</span>
                 <span className={cn('flex items-center gap-1', getComparisonColor(primaryWeapon.speed, compareAttackSpeed, false).color)}>
                   {getComparisonColor(primaryWeapon.speed, compareAttackSpeed, false).symbol && <span className="text-xs">{getComparisonColor(primaryWeapon.speed, compareAttackSpeed, false).symbol}</span>}
-                  {primaryWeapon.speed.toFixed(2)}s
+                  {primaryWeapon.speed.toFixed(3)}s
                 </span>
               </div>
             )}
@@ -254,7 +254,7 @@ export const UnitCard = ({
                 <span className="text-muted-foreground">Speed</span>
                 <span className={cn('flex items-center gap-1', getComparisonColor(movement.speed, compareSpeed).color)}>
                   {getComparisonColor(movement.speed, compareSpeed).symbol && <span className="text-xs">{getComparisonColor(movement.speed, compareSpeed).symbol}</span>}
-                  {movement.speed.toFixed(2)}
+                  {movement.speed.toFixed(3)}
                 </span>
               </div>
             )}
@@ -300,7 +300,7 @@ export const UnitCard = ({
                   <div><span className="text-muted-foreground">Total Defender HP:</span> {displayData.hitpoints} × {versusMetrics.opponentMultiplier} = {displayData.hitpoints * (versusMetrics.opponentMultiplier || 1)}</div>
                   <div><span className="text-muted-foreground">Dmg/Cycle:</span> {versusMetrics.effectiveDamagePerHit} × {versusMetrics.multiplier} = {(versusMetrics.effectiveDamagePerHit || 0) * (versusMetrics.multiplier || 1)}</div>
                   <div><span className="text-muted-foreground">Hits to Kill All:</span> ⌈{displayData.hitpoints * (versusMetrics.opponentMultiplier || 1)} / {(versusMetrics.effectiveDamagePerHit || 0) * (versusMetrics.multiplier || 1)}⌉ = {versusMetrics.hitsToKill}</div>
-                  <div><span className="text-muted-foreground">Time to Kill All:</span> {versusMetrics.hitsToKill} × {primaryWeapon?.speed.toFixed(2)}s = {versusMetrics.timeToKill}s</div>
+                  <div><span className="text-muted-foreground">Time to Kill All:</span> {versusMetrics.hitsToKill} × {primaryWeapon?.speed.toFixed(3)}s = {versusMetrics.timeToKill}s</div>
                 </div>
                 <div className="border-t border-border pt-1 mt-1 text-[9px] text-muted-foreground italic">
                   {versusMetrics.formula}
@@ -408,7 +408,7 @@ export const UnitCard = ({
             <div className="grid grid-cols-2 gap-2">
               <div>
                 <div className="flex justify-between"><span className="text-muted-foreground">Atk</span><span>{Math.round(primaryWeapon.damage || 0)}{applicableBonus > 0 && ` + ${Math.round(applicableBonus)}`}</span></div>
-                {primaryWeapon.speed && <div className="flex justify-between"><span className="text-muted-foreground">AS</span><span>{primaryWeapon.speed.toFixed(2)}s</span></div>}
+                {primaryWeapon.speed && <div className="flex justify-between"><span className="text-muted-foreground">AS</span><span>{primaryWeapon.speed.toFixed(3)}s</span></div>}
                 <div className="flex justify-between"><span className="text-muted-foreground">Range</span><span>{primaryWeapon.range.max}</span></div>
               </div>
               <div>
