@@ -57,9 +57,11 @@ export interface Technology {
   effects?: TechnologyEffect[]; // Effects au niveau de la technologie (all-optimized_tec.json)
 }
 import allTechnologiesData from './all-optimized_tec.json';
+import { applyTechnologyPatches } from './patches/technologies';
 
 // Parse all technologies from the unified file
-export const allTechnologies: Technology[] = allTechnologiesData.data as Technology[];
+const allTechnologiesRaw: Technology[] = allTechnologiesData.data as Technology[];
+export const allTechnologies: Technology[] = applyTechnologyPatches(allTechnologiesRaw) as Technology[];
 
 // Filtrer les technologies qui affectent les stats de combat
 const combatProperties = [

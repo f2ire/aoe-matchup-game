@@ -4,6 +4,7 @@
  */
 
 import allUnifiedData from './all-unified.json';
+import { applyUnitPatches } from './patches/units';
 
 // Interfaces pour la structure all-unified.json
 interface UnifiedWeaponRange {
@@ -113,9 +114,12 @@ interface AllUnifiedData {
 const typedData = allUnifiedData as AllUnifiedData;
 
 // Filtrer uniquement les unités (type === "unit")
-export const allUnits = typedData.data.filter(
+const allUnitsRaw = typedData.data.filter(
   (item): item is UnifiedUnit => item.type === 'unit'
 );
+
+// Appliquer les patchs locaux (non destructif)
+export const allUnits: UnifiedUnit[] = applyUnitPatches(allUnitsRaw) as UnifiedUnit[];
 
 // Interface simplifiée pour l'utilisation dans l'app (compatible avec AoE4Unit)
 export interface AoE4Unit {
