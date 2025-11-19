@@ -13,6 +13,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGr
 import { motion } from "framer-motion";
 
 // Fonction helper pour gérer le toggle exclusif des technologies à paliers
+// Helper: vérifier si une unité est disponible pour une civilisation donnée
+const isUnitAvailableForCiv = (unit: AoE4Unit, civ: string) => {
+  if (!unit) return false;
+  if (civ === "all") return true;
+  return unit.civs.includes(civ);
+};
+
+// Fonction helper pour gérer le toggle exclusif des technologies à paliers
 const handleTieredTechnologyToggle = (
   techId: string,
   activeTechnologies: Set<string>,
@@ -198,6 +206,24 @@ const Sandbox = () => {
   // Technologies actives
   const [activeTechnologiesAlly, setActiveTechnologiesAlly] = useState<Set<string>>(new Set());
   const [activeTechnologiesEnemy, setActiveTechnologiesEnemy] = useState<Set<string>>(new Set());
+  
+  // Si la civilisation change et que l'unité sélectionnée n'est pas disponible, réinitialiser (Allié)
+  useEffect(() => {
+    if (unit1 && !isUnitAvailableForCiv(unit1, selectedCivAlly)) {
+      setUnit1(null);
+      setVariationAlly(null);
+      setActiveTechnologiesAlly(new Set());
+    }
+  }, [selectedCivAlly, unit1]);
+  
+  // Si la civilisation change et que l'unité sélectionnée n'est pas disponible, réinitialiser (Ennemi)
+  useEffect(() => {
+    if (unit2 && !isUnitAvailableForCiv(unit2, selectedCivEnemy)) {
+      setUnit2(null);
+      setVariationEnemy(null);
+      setActiveTechnologiesEnemy(new Set());
+    }
+  }, [selectedCivEnemy, unit2]);
   
   // Mettre à jour l'âge maximum quand l'unité ou la civ change (Ally)
   useEffect(() => {
@@ -783,7 +809,7 @@ const Sandbox = () => {
                   </div>
                   <div className="flex-1 min-w-0 flex justify-end">
                     <UnitCard
-                      className="w-[260px]"
+                      className="w-[280px]"
                       variation={modifiedVariationAlly}
                       unit={modifiedUnit1}
                       side="left"
@@ -815,7 +841,7 @@ const Sandbox = () => {
                 <div className="flex items-start gap-4">
                   <div className="flex-1 min-w-0 flex justify-start">
                     <UnitCard
-                      className="w-[260px]"
+                      className="w-[280px]"
                       variation={modifiedVariationEnemy}
                       unit={modifiedUnit2}
                       side="right"
@@ -948,7 +974,7 @@ const Sandbox = () => {
                       </div>
                       <div className="flex-1 min-w-0">
                         <UnitCard
-                          className="w-[260px]"
+                          className="w-[280px]"
                           variation={modifiedVariationAlly}
                           unit={modifiedUnit1}
                           side="left"
@@ -967,7 +993,7 @@ const Sandbox = () => {
                     <div className="flex items-start gap-4">
                       <div className="flex-1 min-w-0">
                         <UnitCard
-                          className="w-[260px]"
+                          className="w-[280px]"
                           variation={modifiedVariationEnemy}
                           unit={modifiedUnit2}
                           side="right"

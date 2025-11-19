@@ -155,11 +155,13 @@ export const UnitCard = ({
           />
           <div className="flex-1">
             <h3
-              className="truncate text-lg font-serif font-semibold"
+              className="text-lg font-serif font-semibold break-words"
               title={displayData.name}
               aria-label={displayData.name}
             >
-              {displayData.name}{crown}
+              {displayData.name.length > 20
+                ? `${displayData.name.substring(0, 20)}...`
+                : displayData.name}
             </h3>
             {mode === 'versus' && versusMetrics?.multiplier && versusMetrics.multiplier > 1 && (
               <p className="text-xs text-muted-foreground mt-0.5">
@@ -176,16 +178,44 @@ export const UnitCard = ({
               <span className="text-muted-foreground">HP</span>
               <span className={cn('flex items-center gap-1', getComparisonColor(displayData.hitpoints, compareHp).color)}>
                 {getComparisonColor(displayData.hitpoints, compareHp).symbol && <span className="text-xs">{getComparisonColor(displayData.hitpoints, compareHp).symbol}</span>}
-                {displayData.hitpoints}
+                {Math.round(displayData.hitpoints)}
               </span>
             </div>
             {primaryWeapon && (
-              <div className="flex justify-between">
-                <span className="text-muted-foreground">Attack</span>
-                <span className={cn('flex items-center gap-1', getComparisonColor(primaryWeapon.damage || 0, compareAttack).color)}>
-                  {getComparisonColor(primaryWeapon.damage || 0, compareAttack).symbol && <span className="text-xs">{getComparisonColor(primaryWeapon.damage || 0, compareAttack).symbol}</span>}
-                  {primaryWeapon.damage} ({primaryWeapon.type})
-                </span>
+              <div className="flex flex-col">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Attack</span>
+                  <span className={cn('flex items-center gap-1', getComparisonColor(primaryWeapon.damage || 0, compareAttack).color)}>
+                    {getComparisonColor(primaryWeapon.damage || 0, compareAttack).symbol && <span className="text-xs">{getComparisonColor(primaryWeapon.damage || 0, compareAttack).symbol}</span>}
+                    {Math.round(primaryWeapon.damage || 0)} ({primaryWeapon.type})
+                  </span>
+                </div>
+                {(bonusDamage && bonusDamage.length > 0) || maxBonusDamageLines ? (
+                  <div className="pl-2 space-y-1">
+                    {bonusDamage?.map((modifier: any, idx: number) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+                      if (modifier.hidden) return <div key={idx} className="h-4" />;
+                      const targetClasses = modifier.target?.class?.flat() || [];
+                      const targetName = targetClasses.join(' ') || 'Unknown';
+                      const compareModifier = compareBonusDamage?.[idx];
+                      let comparison = { color: '', symbol: '' };
+                      if (compareModifier && !compareModifier.hidden) {
+                        const compareClasses = compareModifier.target?.class?.flat() || [];
+                        if (compareClasses.join(' ') === targetClasses.join(' ')) {
+                          comparison = getComparisonColor(modifier.value, compareModifier.value);
+                        }
+                      }
+                      return (
+                        <div key={idx} className="flex justify-between text-xs">
+                          <span className={cn('flex items-center gap-1', comparison.color)}>
+                            {comparison.symbol && <span className="text-[10px]">{comparison.symbol}</span>}
+                            +{Math.round(modifier.value)} vs
+                          </span>
+                          <span className="capitalize">{targetName}</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
               </div>
             )}
             {primaryWeapon && primaryWeapon.speed && (
@@ -209,14 +239,14 @@ export const UnitCard = ({
               <span className="text-muted-foreground">Melee Armor</span>
               <span className={cn('flex items-center gap-1', getComparisonColor(meleeArmor, compareMeleeArmor).color)}>
                 {getComparisonColor(meleeArmor, compareMeleeArmor).symbol && <span className="text-xs">{getComparisonColor(meleeArmor, compareMeleeArmor).symbol}</span>}
-                {meleeArmor}
+                {Math.round(meleeArmor)}
               </span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Ranged Armor</span>
               <span className={cn('flex items-center gap-1', getComparisonColor(rangedArmor, compareRangedArmor).color)}>
                 {getComparisonColor(rangedArmor, compareRangedArmor).symbol && <span className="text-xs">{getComparisonColor(rangedArmor, compareRangedArmor).symbol}</span>}
-                {rangedArmor}
+                {Math.round(rangedArmor)}
               </span>
             </div>
             {movement && (
@@ -245,32 +275,6 @@ export const UnitCard = ({
                 <div className="flex justify-between"><span className="text-muted-foreground">{civs.includes('mac') ? 'Silver' : 'Olive Oil'}</span><span>{Math.round(costs.oliveoil ?? 0)}</span></div>
               )}
             </div>
-            {(bonusDamage && bonusDamage.length > 0) || maxBonusDamageLines ? (
-              <div className="pl-2 space-y-1">
-                {bonusDamage?.map((modifier: any, idx: number) => { // eslint-disable-line @typescript-eslint/no-explicit-any
-                  if (modifier.hidden) return <div key={idx} className="h-4" />;
-                  const targetClasses = modifier.target?.class?.flat() || [];
-                  const targetName = targetClasses.join(' ') || 'Unknown';
-                  const compareModifier = compareBonusDamage?.[idx];
-                  let comparison = { color: '', symbol: '' };
-                  if (compareModifier && !compareModifier.hidden) {
-                    const compareClasses = compareModifier.target?.class?.flat() || [];
-                    if (compareClasses.join(' ') === targetClasses.join(' ')) {
-                      comparison = getComparisonColor(modifier.value, compareModifier.value);
-                    }
-                  }
-                  return (
-                    <div key={idx} className="flex justify-between text-xs">
-                      <span className={cn('flex items-center gap-1', comparison.color)}>
-                        {comparison.symbol && <span className="text-[10px]">{comparison.symbol}</span>}
-                        +{modifier.value} vs
-                      </span>
-                      <span className="capitalize">{targetName}</span>
-                    </div>
-                  );
-                })}
-              </div>
-            ) : null}
           </div>
         )}
 
@@ -403,14 +407,14 @@ export const UnitCard = ({
           <div className="w-full rounded-md bg-muted/40 p-2 text-[11px] leading-tight">
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Atk</span><span>{primaryWeapon.damage}{applicableBonus > 0 && ` + ${applicableBonus}`}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Atk</span><span>{Math.round(primaryWeapon.damage || 0)}{applicableBonus > 0 && ` + ${Math.round(applicableBonus)}`}</span></div>
                 {primaryWeapon.speed && <div className="flex justify-between"><span className="text-muted-foreground">AS</span><span>{primaryWeapon.speed.toFixed(2)}s</span></div>}
                 <div className="flex justify-between"><span className="text-muted-foreground">Range</span><span>{primaryWeapon.range.max}</span></div>
               </div>
               <div>
-                <div className="flex justify-between"><span className="text-muted-foreground">HP</span><span>{displayData.hitpoints}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Melee Armor</span><span>{meleeArmor}</span></div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Ranged Armor</span><span>{rangedArmor}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">HP</span><span>{Math.round(displayData.hitpoints)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Melee Armor</span><span>{Math.round(meleeArmor)}</span></div>
+                <div className="flex justify-between"><span className="text-muted-foreground">Ranged Armor</span><span>{Math.round(rangedArmor)}</span></div>
               </div>
             </div>
 
