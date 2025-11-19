@@ -5,7 +5,7 @@
  */
 
 import allAbilitiesData from './all-optimized_abi.json';
-import { applyTechnologyPatches } from './patches/technologies';
+import { applyAbilityPatches } from './patches/abilities';
 import type { Technology, TechnologyVariation, TechnologyEffect } from './unified-technologies';
 import { getTechnologiesForUnit } from './unified-technologies';
 
@@ -26,9 +26,9 @@ interface AllAbilitiesData {
 
 const typedData = allAbilitiesData as AllAbilitiesData;
 
-// Appliquer les patchs (on peut réutiliser la fonction de patch des technos)
+// Appliquer les patchs spécifiques aux abilités
 const allAbilitiesRaw: Ability[] = typedData.data as Ability[];
-export const allAbilities: Ability[] = applyTechnologyPatches(allAbilitiesRaw) as Ability[];
+export const allAbilities: Ability[] = applyAbilityPatches(allAbilitiesRaw);
 
 console.log(`✅ ${allAbilities.length} abilities AoE4 chargées depuis all-optimized_abi.json`);
 
@@ -42,7 +42,8 @@ const combatProperties = [
   'moveSpeed',
   'maxRange',
   'attackSpeed',
-  'bonusDamage'
+  'bonusDamage',
+  'versusOpponentDamageDebuff'
 ];
 
 const nonCombatTargets = [
@@ -123,6 +124,18 @@ export function abilityAffectsUnit(
     let matchesByClass = false;
     let matchesByIdAsClass = false;
     
+    // Pour les effets versus debuff, seul select.id compte (l'unité qui possède l'abilité)
+    // La partie select.class définit la cible de l'effet, pas qui possède l'abilité
+    if (effect.property === 'versusOpponentDamageDebuff') {
+      if (effect.select?.id && unitId) {
+        matchesById = effect.select.id.some(id => 
+          id.toLowerCase() === unitId.toLowerCase()
+        );
+      }
+      return matchesById;
+    }
+    
+    // Pour les autres effets, logique normale
     if (effect.select?.id && unitId) {
       matchesById = effect.select.id.some(id => 
         id.toLowerCase() === unitId.toLowerCase()
@@ -171,6 +184,15 @@ export function getAbilitiesForUnit(
         let matchesByClass = false;
         let matchesByIdAsClass = false;
         
+        // Pour les effets versus debuff, seul select.id compte
+        if (effect.property === 'versusOpponentDamageDebuff') {
+          if (effect.select?.id && unitId) {
+            matchesById = effect.select.id.some(id => id.toLowerCase() === unitId.toLowerCase());
+          }
+          return matchesById;
+        }
+        
+        // Pour les autres effets, logique normale
         if (effect.select?.id && unitId) {
           matchesById = effect.select.id.some(id => id.toLowerCase() === unitId.toLowerCase());
           matchesByIdAsClass = effect.select.id.some(id =>

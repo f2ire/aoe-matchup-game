@@ -7,7 +7,7 @@ import { getAbilitiesForUnit, getActiveAbilityVariations } from "@/data/unified-
 import type { Ability, AbilityVariation } from "@/data/unified-abilities";
 import { CIVILIZATIONS, Civilization } from "@/data/civilizations";
 import { UnitCard } from "@/components/UnitCard";
-import { computeVersus, calculateEqualCostMultipliers, computeVersusAtEqualCost } from "@/lib/combat";
+import { computeVersus, calculateEqualCostMultipliers, computeVersusAtEqualCost, getVersusDebuffMultiplier } from "@/lib/combat";
 import { AgeSelector } from "@/components/AgeSelector";
 import { TechnologySelector } from "@/components/TechnologySelector";
 import { AbilitySelector } from "@/components/AbilitySelector";
@@ -410,102 +410,141 @@ const Sandbox = () => {
   const enemyData = variationEnemy || unit2;
   
   // Créer des variations modifiées avec les technologies appliquées
-  const modifiedVariationAlly = variationAlly ? {
-    ...variationAlly,
-    hitpoints: modifiedAllyStats.hitpoints,
-    weapons: variationAlly.weapons.map(weapon => ({
-      ...weapon,
-      damage: weapon.type === 'melee' ? modifiedAllyStats.meleeAttack : modifiedAllyStats.rangedAttack,
-      speed: modifiedAllyStats.attackSpeed,
-      range: weapon.range ? {
-        ...weapon.range,
-        max: modifiedAllyStats.maxRange || weapon.range.max
-      } : undefined,
-      modifiers: modifiedAllyStats.bonusDamage
-    })),
-    armor: [
-      { type: 'melee', value: modifiedAllyStats.meleeArmor },
-      { type: 'ranged', value: modifiedAllyStats.rangedArmor }
-    ],
-    movement: variationAlly.movement ? {
-      ...variationAlly.movement,
-      speed: modifiedAllyStats.moveSpeed
-    } : undefined
-  } : undefined;
+  const modifiedVariationAlly = variationAlly ? (() => {
+    // Calculer le debuff versus des abilités ennemies
+    const debuffMultiplier = unit2 && activeAbilitiesEnemy.size > 0 
+      ? getVersusDebuffMultiplier(variationAlly.classes || [], Array.from(activeAbilitiesEnemy))
+      : 1.0;
+    
+    return {
+      ...variationAlly,
+      hitpoints: modifiedAllyStats.hitpoints,
+      weapons: variationAlly.weapons.map(weapon => ({
+        ...weapon,
+        damage: (weapon.type === 'melee' ? modifiedAllyStats.meleeAttack : modifiedAllyStats.rangedAttack) * debuffMultiplier,
+        speed: modifiedAllyStats.attackSpeed,
+        range: weapon.range ? {
+          ...weapon.range,
+          max: modifiedAllyStats.maxRange || weapon.range.max
+        } : undefined,
+        modifiers: modifiedAllyStats.bonusDamage
+      })),
+      armor: [
+        { type: 'melee', value: modifiedAllyStats.meleeArmor },
+        { type: 'ranged', value: modifiedAllyStats.rangedArmor }
+      ],
+      movement: variationAlly.movement ? {
+        ...variationAlly.movement,
+        speed: modifiedAllyStats.moveSpeed
+      } : undefined
+    };
+  })() : undefined;
   
-  const modifiedVariationEnemy = variationEnemy ? {
-    ...variationEnemy,
-    hitpoints: modifiedEnemyStats.hitpoints,
-    weapons: variationEnemy.weapons.map(weapon => ({
-      ...weapon,
-      damage: weapon.type === 'melee' ? modifiedEnemyStats.meleeAttack : modifiedEnemyStats.rangedAttack,
-      speed: modifiedEnemyStats.attackSpeed,
-      range: weapon.range ? {
-        ...weapon.range,
-        max: modifiedEnemyStats.maxRange || weapon.range.max
-      } : undefined,
-      modifiers: modifiedEnemyStats.bonusDamage
-    })),
-    armor: [
-      { type: 'melee', value: modifiedEnemyStats.meleeArmor },
-      { type: 'ranged', value: modifiedEnemyStats.rangedArmor }
-    ],
-    movement: variationEnemy.movement ? {
-      ...variationEnemy.movement,
-      speed: modifiedEnemyStats.moveSpeed
-    } : undefined
-  } : undefined;
+  const modifiedVariationEnemy = variationEnemy ? (() => {
+    // Calculer le debuff versus des abilités ally
+    const debuffMultiplier = unit1 && activeAbilitiesAlly.size > 0 
+      ? getVersusDebuffMultiplier(variationEnemy.classes || [], Array.from(activeAbilitiesAlly))
+      : 1.0;
+    
+    return {
+      ...variationEnemy,
+      hitpoints: modifiedEnemyStats.hitpoints,
+      weapons: variationEnemy.weapons.map(weapon => ({
+        ...weapon,
+        damage: (weapon.type === 'melee' ? modifiedEnemyStats.meleeAttack : modifiedEnemyStats.rangedAttack) * debuffMultiplier,
+        speed: modifiedEnemyStats.attackSpeed,
+        range: weapon.range ? {
+          ...weapon.range,
+          max: modifiedEnemyStats.maxRange || weapon.range.max
+        } : undefined,
+        modifiers: modifiedEnemyStats.bonusDamage
+      })),
+      armor: [
+        { type: 'melee', value: modifiedEnemyStats.meleeArmor },
+        { type: 'ranged', value: modifiedEnemyStats.rangedArmor }
+      ],
+      movement: variationEnemy.movement ? {
+        ...variationEnemy.movement,
+        speed: modifiedEnemyStats.moveSpeed
+      } : undefined
+    };
+  })() : undefined;
   
-  const modifiedUnit1 = unit1 && !variationAlly ? {
-    ...unit1,
-    hitpoints: modifiedAllyStats.hitpoints,
-    weapons: unit1.weapons.map(weapon => ({
-      ...weapon,
-      damage: weapon.type === 'melee' ? modifiedAllyStats.meleeAttack : modifiedAllyStats.rangedAttack,
-      speed: modifiedAllyStats.attackSpeed,
-      range: weapon.range ? {
-        ...weapon.range,
-        max: modifiedAllyStats.maxRange || weapon.range.max
-      } : undefined,
-      modifiers: modifiedAllyStats.bonusDamage
-    })),
-    armor: [
-      { type: 'melee', value: modifiedAllyStats.meleeArmor },
-      { type: 'ranged', value: modifiedAllyStats.rangedArmor }
-    ],
-    movement: unit1.movement ? {
-      ...unit1.movement,
-      speed: modifiedAllyStats.moveSpeed
-    } : undefined
-  } : undefined;
+  const modifiedUnit1 = unit1 && !variationAlly ? (() => {
+    // Calculer le debuff versus des abilités ennemies
+    const debuffMultiplier = unit2 && activeAbilitiesEnemy.size > 0 
+      ? getVersusDebuffMultiplier(unit1.classes || [], Array.from(activeAbilitiesEnemy))
+      : 1.0;
+    
+    return {
+      ...unit1,
+      hitpoints: modifiedAllyStats.hitpoints,
+      weapons: unit1.weapons.map(weapon => ({
+        ...weapon,
+        damage: (weapon.type === 'melee' ? modifiedAllyStats.meleeAttack : modifiedAllyStats.rangedAttack) * debuffMultiplier,
+        speed: modifiedAllyStats.attackSpeed,
+        range: weapon.range ? {
+          ...weapon.range,
+          max: modifiedAllyStats.maxRange || weapon.range.max
+        } : undefined,
+        modifiers: modifiedAllyStats.bonusDamage
+      })),
+      armor: [
+        { type: 'melee', value: modifiedAllyStats.meleeArmor },
+        { type: 'ranged', value: modifiedAllyStats.rangedArmor }
+      ],
+      movement: unit1.movement ? {
+        ...unit1.movement,
+        speed: modifiedAllyStats.moveSpeed
+      } : undefined
+    };
+  })() : undefined;
   
-  const modifiedUnit2 = unit2 && !variationEnemy ? {
-    ...unit2,
-    hitpoints: modifiedEnemyStats.hitpoints,
-    weapons: unit2.weapons.map(weapon => ({
-      ...weapon,
-      damage: weapon.type === 'melee' ? modifiedEnemyStats.meleeAttack : modifiedEnemyStats.rangedAttack,
-      speed: modifiedEnemyStats.attackSpeed,
-      range: weapon.range ? {
-        ...weapon.range,
-        max: modifiedEnemyStats.maxRange || weapon.range.max
-      } : undefined,
-      modifiers: modifiedEnemyStats.bonusDamage
-    })),
-    armor: [
-      { type: 'melee', value: modifiedEnemyStats.meleeArmor },
-      { type: 'ranged', value: modifiedEnemyStats.rangedArmor }
-    ],
-    movement: unit2.movement ? {
-      ...unit2.movement,
-      speed: modifiedEnemyStats.moveSpeed
-    } : undefined
-  } : undefined;
+  const modifiedUnit2 = unit2 && !variationEnemy ? (() => {
+    // Calculer le debuff versus des abilités ally
+    const debuffMultiplier = unit1 && activeAbilitiesAlly.size > 0 
+      ? getVersusDebuffMultiplier(unit2.classes || [], Array.from(activeAbilitiesAlly))
+      : 1.0;
+    
+    return {
+      ...unit2,
+      hitpoints: modifiedEnemyStats.hitpoints,
+      weapons: unit2.weapons.map(weapon => ({
+        ...weapon,
+        damage: (weapon.type === 'melee' ? modifiedEnemyStats.meleeAttack : modifiedEnemyStats.rangedAttack) * debuffMultiplier,
+        speed: modifiedEnemyStats.attackSpeed,
+        range: weapon.range ? {
+          ...weapon.range,
+          max: modifiedEnemyStats.maxRange || weapon.range.max
+        } : undefined,
+        modifiers: modifiedEnemyStats.bonusDamage
+      })),
+      armor: [
+        { type: 'melee', value: modifiedEnemyStats.meleeArmor },
+        { type: 'ranged', value: modifiedEnemyStats.rangedArmor }
+      ],
+      movement: unit2.movement ? {
+        ...unit2.movement,
+        speed: modifiedEnemyStats.moveSpeed
+      } : undefined
+    };
+  })() : undefined;
   
   // Stats finales avec coûts
   const allyStats = allyData ? {
     hp: modifiedAllyStats.hitpoints,
-    attack: Math.max(modifiedAllyStats.meleeAttack, modifiedAllyStats.rangedAttack),
+    attack: (() => {
+      const baseAttack = Math.max(modifiedAllyStats.meleeAttack, modifiedAllyStats.rangedAttack);
+      // En mode versus, appliquer le debuff des abilités ennemies sur les dégâts de l'ally
+      if (unit1 && unit2 && activeAbilitiesEnemy.size > 0) {
+        const debuffMultiplier = getVersusDebuffMultiplier(
+          unit1.classes || [],
+          Array.from(activeAbilitiesEnemy)
+        );
+        return baseAttack * debuffMultiplier;
+      }
+      return baseAttack;
+    })(),
     meleeArmor: modifiedAllyStats.meleeArmor,
     rangedArmor: modifiedAllyStats.rangedArmor,
     speed: modifiedAllyStats.moveSpeed,
@@ -518,7 +557,18 @@ const Sandbox = () => {
   
   const enemyStats = enemyData ? {
     hp: modifiedEnemyStats.hitpoints,
-    attack: Math.max(modifiedEnemyStats.meleeAttack, modifiedEnemyStats.rangedAttack),
+    attack: (() => {
+      const baseAttack = Math.max(modifiedEnemyStats.meleeAttack, modifiedEnemyStats.rangedAttack);
+      // En mode versus, appliquer le debuff des abilités ally sur les dégâts de l'enemy
+      if (unit1 && unit2 && activeAbilitiesAlly.size > 0) {
+        const debuffMultiplier = getVersusDebuffMultiplier(
+          unit2.classes || [],
+          Array.from(activeAbilitiesAlly)
+        );
+        return baseAttack * debuffMultiplier;
+      }
+      return baseAttack;
+    })(),
     meleeArmor: modifiedEnemyStats.meleeArmor,
     rangedArmor: modifiedEnemyStats.rangedArmor,
     speed: modifiedEnemyStats.moveSpeed,
@@ -981,17 +1031,32 @@ const Sandbox = () => {
               let versusData;
               let multipliers = undefined;
               
+              // Convertir les Sets en tableaux pour passer aux fonctions de combat
+              const abilitiesArrayAlly = Array.from(activeAbilitiesAlly);
+              const abilitiesArrayEnemy = Array.from(activeAbilitiesEnemy);
+              
               if (atEqualCost) {
-                const result = computeVersusAtEqualCost(modifiedVariationAlly || modifiedUnit1!, modifiedVariationEnemy || modifiedUnit2!);
+                const result = computeVersusAtEqualCost(
+                  modifiedVariationAlly || modifiedUnit1!, 
+                  modifiedVariationEnemy || modifiedUnit2!,
+                  abilitiesArrayAlly,
+                  abilitiesArrayEnemy
+                );
                 versusData = result;
                 multipliers = result.multipliers;
               } else {
-                versusData = computeVersus(modifiedVariationAlly || modifiedUnit1!, modifiedVariationEnemy || modifiedUnit2!);
+                versusData = computeVersus(
+                  modifiedVariationAlly || modifiedUnit1!, 
+                  modifiedVariationEnemy || modifiedUnit2!,
+                  abilitiesArrayAlly,
+                  abilitiesArrayEnemy
+                );
               }
               
               const isDraw = versusData.winner === 'draw';
-              const leftIsWinner = !isDraw && versusData.winner === versusData.attacker.id;
-              const rightIsWinner = !isDraw && versusData.winner === versusData.defender.id;
+              // Comparer avec le nom pour distinguer les unités identiques (gauche = attacker, droite = defender)
+              const leftIsWinner = !isDraw && versusData.winner === versusData.attacker.id && versusData.attacker.timeToKill !== null && versusData.defender.timeToKill !== null && versusData.attacker.timeToKill < versusData.defender.timeToKill;
+              const rightIsWinner = !isDraw && versusData.winner === versusData.defender.id && versusData.attacker.timeToKill !== null && versusData.defender.timeToKill !== null && versusData.defender.timeToKill < versusData.attacker.timeToKill;
               const leftMetrics = {
                 dps: versusData.attacker.dps,
                 dpsPerCost: versusData.attacker.dpsPerCost,

@@ -384,7 +384,7 @@ export const UnitCard = ({
                     <>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">HP Remaining:</span>
-                        <span className="font-medium">{versusMetrics.winnerHpRemaining} ({hpPercentage}%)</span>
+                        <span className="font-medium">{Math.round(versusMetrics.winnerHpRemaining)} ({hpPercentage}%)</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-muted-foreground">Units Remaining:</span>

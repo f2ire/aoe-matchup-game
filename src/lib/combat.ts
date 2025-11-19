@@ -1,4 +1,5 @@
 import { AoE4Unit, UnifiedVariation, UnifiedWeapon, UnifiedArmor, getArmorValue } from "@/data/unified-units";
+import { allAbilities } from "@/data/unified-abilities";
 
 // Type regroupé pour accepter unit ou variation modifiée
 export interface CombatEntity {
@@ -15,6 +16,7 @@ export interface CombatEntity {
     oliveoil?: number;
   };
   classes: string[];
+  activeAbilities?: string[]; // IDs des abilités actives
 }
 
 export interface VersusMetrics {
@@ -38,7 +40,7 @@ export interface VersusResult {
   resourceDifference?: number;
 }
 
-function toCombatEntity(source: AoE4Unit | UnifiedVariation): CombatEntity {
+function toCombatEntity(source: AoE4Unit | UnifiedVariation, activeAbilities?: string[]): CombatEntity {
   return {
     id: source.id,
     name: source.name,
@@ -47,6 +49,7 @@ function toCombatEntity(source: AoE4Unit | UnifiedVariation): CombatEntity {
     armor: source.armor || [],
     costs: source.costs,
     classes: source.classes || [],
+    activeAbilities: activeAbilities || [],
   };
 }
 
@@ -72,8 +75,49 @@ function shouldIgnoreArmor(attacker: CombatEntity, weapon?: UnifiedWeapon): bool
   return false;
 }
 
+// Calcule le multiplicateur de debuff versus appliqué par les abilités du défenseur sur l'attaquant
+export function getVersusDebuffMultiplier(attackerClasses: string[], defenderAbilities: string[]): number {
+  if (!defenderAbilities || defenderAbilities.length === 0) return 1.0;
+  
+  let multiplier = 1.0;
+  const attackerClassesLower = attackerClasses.map(c => c.toLowerCase());
+  
+  // Pour chaque abilité active du défenseur
+  for (const abilityId of defenderAbilities) {
+    const ability = allAbilities.find(a => a.id === abilityId);
+    if (!ability || !ability.effects) continue;
+    
+    // Chercher les effets de type versusOpponentDamageDebuff
+    for (const effect of ability.effects) {
+      if (effect.property !== 'versusOpponentDamageDebuff') continue;
+      if (effect.effect !== 'multiply') continue;
+      
+      // Vérifier si l'attaquant correspond aux classes ciblées
+      if (effect.select?.class) {
+        const groups: string[][] = Array.isArray(effect.select.class) && effect.select.class.some(v => Array.isArray(v))
+          ? (effect.select.class as unknown as string[][])
+          : [effect.select.class as unknown as string[]];
+        
+        const matches = groups.some(group => {
+          if (!Array.isArray(group)) return false;
+          return group.every(req => {
+            const r = req.toLowerCase();
+            return attackerClassesLower.includes(r);
+          });
+        });
+        
+        if (matches) {
+          multiplier *= effect.value;
+        }
+      }
+    }
+  }
+  
+  return multiplier;
+}
+
 // Calcule les dégâts effectifs par coup d'attaquant vers défenseur
-function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity): { value: number; base: number; bonus: number; armorApplied: number; weapon?: UnifiedWeapon } {
+function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity): { value: number; base: number; bonus: number; armorApplied: number; weapon?: UnifiedWeapon; debuffMultiplier?: number } {
   const weapon = attacker.weapons[0];
   if (!weapon) return { value: 1, base: 0, bonus: 0, armorApplied: 0, weapon }; // Pas d'arme -> minimal
 
@@ -132,9 +176,16 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity):
     }
   }
 
-  const raw = baseDamage + bonusDamage - armorValue;
+  let raw = baseDamage + bonusDamage - armorValue;
+  
+  // Appliquer les debuffs versus (ex: Camel Unease)
+  const debuffMultiplier = getVersusDebuffMultiplier(attacker.classes, defender.activeAbilities || []);
+  if (debuffMultiplier !== 1.0) {
+    raw = raw * debuffMultiplier;
+  }
+  
   const clamped = raw < 1 ? 1 : raw; // Minimum 1
-  return { value: clamped, base: baseDamage, bonus: bonusDamage, armorApplied: armorValue, weapon };
+  return { value: clamped, base: baseDamage, bonus: bonusDamage, armorApplied: armorValue, weapon, debuffMultiplier: debuffMultiplier !== 1.0 ? debuffMultiplier : undefined };
 }
 
 function round(value: number, decimals: number): number {
@@ -160,7 +211,8 @@ function computeMetrics(attacker: CombatEntity, defender: CombatEntity): VersusM
     dpsPerCost = cost > 0 ? round(dps / cost, 2) : null;
   }
 
-  const formula = `Effective = max(1, Base(${attackData.base}) + Bonus(${attackData.bonus}) - Armor(${attackData.armorApplied})) = ${attackData.value}` + (weapon ? `; DPS = ${attackData.value} / ${attackSpeed}` : "");
+  const debuffText = attackData.debuffMultiplier ? ` × ${attackData.debuffMultiplier} (debuff)` : '';
+  const formula = `Effective = max(1, Base(${attackData.base}) + Bonus(${attackData.bonus}) - Armor(${attackData.armorApplied})${debuffText}) = ${attackData.value}` + (weapon ? `; DPS = ${attackData.value} / ${attackSpeed}` : "");
 
   return {
     id: attacker.id,
@@ -268,9 +320,14 @@ export function calculateEqualCostMultipliers(costA: number, costB: number): { m
   };
 }
 
-export function computeVersus(a: AoE4Unit | UnifiedVariation, b: AoE4Unit | UnifiedVariation): VersusResult {
-  const A = toCombatEntity(a);
-  const B = toCombatEntity(b);
+export function computeVersus(
+  a: AoE4Unit | UnifiedVariation, 
+  b: AoE4Unit | UnifiedVariation,
+  activeAbilitiesA?: string[],
+  activeAbilitiesB?: string[]
+): VersusResult {
+  const A = toCombatEntity(a, activeAbilitiesA);
+  const B = toCombatEntity(b, activeAbilitiesB);
   const metricsA = computeMetrics(A, B);
   const metricsB = computeMetrics(B, A);
 
@@ -296,9 +353,14 @@ export function computeVersus(a: AoE4Unit | UnifiedVariation, b: AoE4Unit | Unif
 }
 
 // Compute versus with equal cost multipliers
-export function computeVersusAtEqualCost(a: AoE4Unit | UnifiedVariation, b: AoE4Unit | UnifiedVariation): VersusResult & { multipliers: { multA: number; multB: number; totalCostA: number; totalCostB: number } } {
-  const A = toCombatEntity(a);
-  const B = toCombatEntity(b);
+export function computeVersusAtEqualCost(
+  a: AoE4Unit | UnifiedVariation, 
+  b: AoE4Unit | UnifiedVariation,
+  activeAbilitiesA?: string[],
+  activeAbilitiesB?: string[]
+): VersusResult & { multipliers: { multA: number; multB: number; totalCostA: number; totalCostB: number } } {
+  const A = toCombatEntity(a, activeAbilitiesA);
+  const B = toCombatEntity(b, activeAbilitiesB);
   
   // Calculer les multiplicateurs
   const costA = totalCost(A);
