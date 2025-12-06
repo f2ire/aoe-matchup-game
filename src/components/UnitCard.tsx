@@ -51,6 +51,8 @@ interface UnitCardProps {
   bonusDamage?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   compareBonusDamage?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
   maxBonusDamageLines?: number; // Nombre maximum de lignes de bonus pour l'alignement
+  chargeBonus?: number;
+  compareChargeBonus?: number;
   compareCost?: number;
 }
 
@@ -69,6 +71,8 @@ export const UnitCard = ({
   bonusDamage,
   compareBonusDamage,
   maxBonusDamageLines,
+  chargeBonus,
+  compareChargeBonus,
   compareCost,
   className
 }: UnitCardProps) => {
@@ -103,18 +107,51 @@ export const UnitCard = ({
   if (mode === 'versus' && versusMetrics?.opponentClasses && primaryWeapon?.modifiers?.length) {
     const opp = versusMetrics.opponentClasses.map(c => c.toLowerCase());
     const expandedOpp = new Set<string>(opp);
+    
+    // Log: Afficher les classes de l'unité ennemie
+    console.log(`%c[BONUS] Unité ennemie: ${displayData.name}`, 'color: #ff6b6b; font-weight: bold;');
+    console.log('Classes ennemies:', Array.from(expandedOpp));
+    
+    // Log: Afficher les classes ciblées par les bonus
+    const targetedClasses = new Set<string>();
+    
     for (const mod of primaryWeapon.modifiers as any[]) { // eslint-disable-line @typescript-eslint/no-explicit-any
       const spec = mod.target?.class;
       if (!spec) continue;
-      console.log('Weapon modifier target:', spec, 'Opponent classes:', Array.from(expandedOpp));
+      
+      // Ajouter les classes ciblées à l'ensemble
       const groups: string[][] = Array.isArray(spec) && spec.some(v => Array.isArray(v)) ? (spec as unknown as string[][]) : [spec as unknown as string[]];
-      const applies = groups.some(group => Array.isArray(group) && group.every(req => expandedOpp.has(req.toLowerCase())));
-      console.log('Applies:', applies);
+      groups.forEach(group => {
+        if (Array.isArray(group)) {
+          group.forEach(cls => {
+            const clsLower = cls.toLowerCase();
+            targetedClasses.add(clsLower);
+          });
+        }
+      });
+      
+      const applies = groups.some(group => {
+        if (!Array.isArray(group)) return false;
+        return group.every(req => {
+          const reqLower = req.toLowerCase();
+          const exists = expandedOpp.has(reqLower);
+          console.log(`  Vérification: "${reqLower}" existe? ${exists ? '✓' : '✗'}`);
+          return exists;
+        });
+      });
+      
       if (applies) {
         const val = (mod.value ?? mod.amount ?? 0) as number;
+        const targetName = groups.map((g: string[]) => g.join(' + ')).join(' OU ');
+        console.log(`%c✓ Bonus appliqué: +${val} vs ${targetName}`, 'color: #51cf66; font-weight: bold;');
         applicableBonus += val;
+      } else {
+        const targetName = groups.map((g: string[]) => g.join(' + ')).join(' OU ');
+        console.log(`%c✗ Bonus NON appliqué: vs ${targetName}`, 'color: #ffa94d;');
       }
     }
+    
+    console.log('Classes ciblées par bonus:', Array.from(targetedClasses));
   }
 
   return (
@@ -194,6 +231,23 @@ export const UnitCard = ({
                   <div className="pl-2 space-y-1">
                     {bonusDamage?.map((modifier: any, idx: number) => { // eslint-disable-line @typescript-eslint/no-explicit-any
                       if (modifier.hidden) return <div key={idx} className="h-4" />;
+                      
+                      // Affichage spécial pour le bonus de charge
+                      if (modifier.isChargeBonus) {
+                        const compareModifier = compareBonusDamage?.[idx];
+                        const comparison = compareModifier && !compareModifier.hidden && compareModifier.isChargeBonus
+                          ? getComparisonColor(modifier.value, compareModifier.value)
+                          : { color: '', symbol: '' };
+                        return (
+                          <div key={idx} className="flex justify-between text-xs">
+                            <span className={cn('flex items-center gap-1', comparison.color)}>
+                              {comparison.symbol && <span className="text-[10px]">{comparison.symbol}</span>}
+                              +{Math.round(modifier.value)} Charge
+                            </span>
+                          </div>
+                        );
+                      }
+                      
                       const targetClasses = modifier.target?.class?.flat() || [];
                       const targetName = targetClasses.join(' ') || 'Unknown';
                       const compareModifier = compareBonusDamage?.[idx];

@@ -13,7 +13,8 @@ export interface UnitVariationMatch {
 
 export interface UnitVariationPatch<UnifiedVariation> {
   match: UnitVariationMatch;
-  update: DeepPartial<UnifiedVariation>;
+  update?: DeepPartial<UnifiedVariation>;
+  after?: (variation: UnifiedVariation) => UnifiedVariation;
 }
 
 export interface UnitUnifiedPatch<UnifiedUnit, UnifiedVariation> {

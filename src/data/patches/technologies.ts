@@ -79,6 +79,87 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
         }
       }
     ]
+  },
+
+  // geometry: add effects targeting trebuchets (+20% base damage and bonus damage)
+  {
+    id: 'geometry',
+    update: {
+      effects: [
+        {
+          property: 'rangedAttack',
+          select: { id: ['huihui-pao', 'counterweight-trebuchet', 'traction-trebuchet'] },
+          effect: 'multiply',
+          value: 1.2,
+          type: 'passive'
+        },
+        {
+          property: 'siegeAttack',
+          select: { id: ['huihui-pao', 'counterweight-trebuchet', 'traction-trebuchet'] },
+          effect: 'multiply',
+          value: 1.2,
+          type: 'bonus',
+          target: { class: [['building']] }
+        },
+        {
+          property: 'siegeAttack',
+          select: { id: ['huihui-pao', 'counterweight-trebuchet', 'traction-trebuchet'] },
+          effect: 'multiply',
+          value: 1.2,
+          type: 'bonus',
+          target: { class: [['naval', 'unit']] }
+        }
+      ]
+    }
+  },
+
+  // chemistry: add effects targeting gunpowder siege/warship units (+25% bonus damage)
+  {
+    id: 'chemistry',
+    update: {
+      effects: [
+        {
+          property: 'siegeAttack',
+          select: { class: [['gunpowder', 'siege'], ['gunpowder', 'warship']] },
+          effect: 'multiply',
+          value: 1.25,
+          type: 'bonus',
+          target: { class: [["war", "elephant"]] }
+        },
+        {
+          property: 'siegeAttack',
+          select: { class: [['gunpowder', 'siege'], ['gunpowder', 'warship']] },
+          effect: 'multiply',
+          value: 1.25,
+          type: 'bonus',
+          target: { class: [['building']] }
+        },
+        {
+          property: 'siegeAttack',
+          select: { class: [['gunpowder', 'siege'], ['gunpowder', 'warship']] },
+          effect: 'multiply',
+          value: 1.25,
+          type: 'bonus',
+          target: { class: [['naval_unit']] }
+        },
+        {
+          property: 'siegeAttack',
+          select: { class: [['gunpowder', 'siege'], ['gunpowder', 'warship']] },
+          effect: 'multiply',
+          value: 1.25,
+          type: 'bonus',
+          target: { class: [['war_elephant']] }
+        },
+        {
+          property: 'siegeAttack',
+          select: { class: [['gunpowder', 'siege'], ['gunpowder', 'warship']] },
+          effect: 'multiply',
+          value: 1.25,
+          type: 'bonus',
+          target: { class: [['infantry']] }
+        }
+      ]
+    }
   }
 ];
 

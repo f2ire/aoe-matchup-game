@@ -63,8 +63,7 @@ export function isCombatAbility(ability: Ability): boolean {
   const abilityLevelEffects = ability.effects;
   if (abilityLevelEffects && abilityLevelEffects.length > 0) {
     const hasCombatEffect = abilityLevelEffects.some(effect => {
-      // Si l'ability cible une unité spécifique (select.id), la considérer comme ability de combat
-      // même si la property est "unknown" (ex: Quick Strike pour Ghulam)
+
       if (effect.select?.id && effect.select.id.length > 0) {
         return true;
       }
@@ -172,8 +171,7 @@ export function getAbilitiesForUnit(
   unitId?: string
 ): Ability[] {
   const abilities = combatAbilities.filter(ability => {
-    // Vérifier si la civ a accès à cette ability
-    if (!ability.civs.includes(civAbbr) && civAbbr !== 'all') {
+    if (ability.civs.length > 0 && !ability.civs.includes(civAbbr) && civAbbr !== 'all') {
       return false;
     }
     
@@ -216,7 +214,7 @@ export function getAbilitiesForUnit(
     
     // Vérifier au niveau des variations
     return ability.variations.some(variation => {
-      if (civAbbr !== 'all' && !variation.civs.includes(civAbbr)) return false;
+      if (variation.civs.length > 0 && civAbbr !== 'all' && !variation.civs.includes(civAbbr)) return false;
 
       // Si cette ability est déverrouillée par une technologie (ex: "technologies/camel-support")
       // et que la technologie du même nom/ID s'applique déjà à l'unité, ignorer l'ability
@@ -255,7 +253,7 @@ export function getAbilityVariation(
   if (ability.minAge > age) return null;
 
   const variation = ability.variations.find(v => {
-    if (civAbbr !== 'all' && !v.civs.includes(civAbbr)) return false;
+    if (v.civs.length > 0 && civAbbr !== 'all' && !v.civs.includes(civAbbr)) return false;
     return true;
   });
 

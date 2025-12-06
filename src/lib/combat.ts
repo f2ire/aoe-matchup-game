@@ -117,15 +117,19 @@ export function getVersusDebuffMultiplier(attackerClasses: string[], defenderAbi
 }
 
 // Calcule les dégâts effectifs par coup d'attaquant vers défenseur
-function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity): { value: number; base: number; bonus: number; armorApplied: number; weapon?: UnifiedWeapon; debuffMultiplier?: number } {
+function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, chargeBonus: number = 0, isFirstAttack: boolean = false): { value: number; base: number; bonus: number; armorApplied: number; weapon?: UnifiedWeapon; debuffMultiplier?: number } {
   const weapon = attacker.weapons[0];
   if (!weapon) return { value: 1, base: 0, bonus: 0, armorApplied: 0, weapon }; // Pas d'arme -> minimal
 
   const baseDamage = weapon.damage || 0;
+  
+  // Ajouter le bonus de charge SEULEMENT au premier attaque
+  const chargeBonus_applied = isFirstAttack ? chargeBonus : 0;
 
   // Bonus applicables : logique AND par groupe. Chaque entrée de mod.target.class:
   // - Si c'est un tableau simple ["infantry","light"] => nécessite toutes ces classes (AND)
   // - Si c'est un tableau de tableaux [["light","gunpowder","infantry"],["cavalry","melee"]] => OR entre groupes, AND à l'intérieur.
+  // NOTE: Les bonus "siegeAttack" s'appliquent comme les autres bonus normaux (depuis l'unification des données)
   let bonusDamage = 0;
   if (weapon.modifiers && defender.classes && defender.classes.length > 0) {
     const defenderClassesLower = defender.classes.map(c => c.toLowerCase());
@@ -135,6 +139,9 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity):
       expandedTokens.add(cls);
     }
     for (const mod of weapon.modifiers) {
+      // Appliquer les modifiers normaux et siegeAttack (property est juste un label, pas une raison d'ignorer)
+      // if (mod.property === "siegeAttack") continue; // SUPPRIMÉ: siegeAttack doit être appliqué comme les autres
+      
       const spec = mod.target?.class;
       if (!spec) continue;
 
@@ -160,7 +167,8 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity):
 
   // Détermination de l'armure à appliquer
   let armorValue = 0;
-  if (!shouldIgnoreArmor(attacker, weapon)) {
+  // Les armes siege ignorent l'armure (elles ne sont pas affectées par melee ou ranged armor)
+  if (weapon.type !== "siege" && !shouldIgnoreArmor(attacker, weapon)) {
     if (weapon.type === "melee") {
       armorValue = getArmorValue(defender as unknown as AoE4Unit, "melee");
     } else if (weapon.type === "ranged") {
@@ -176,7 +184,7 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity):
     }
   }
 
-  let raw = baseDamage + bonusDamage - armorValue;
+  let raw = baseDamage + bonusDamage + chargeBonus_applied - armorValue;
   
   // Appliquer les debuffs versus (ex: Camel Unease)
   const debuffMultiplier = getVersusDebuffMultiplier(attacker.classes, defender.activeAbilities || []);
@@ -185,7 +193,7 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity):
   }
   
   const clamped = raw < 1 ? 1 : raw; // Minimum 1
-  return { value: clamped, base: baseDamage, bonus: bonusDamage, armorApplied: armorValue, weapon, debuffMultiplier: debuffMultiplier !== 1.0 ? debuffMultiplier : undefined };
+  return { value: clamped, base: baseDamage, bonus: bonusDamage + chargeBonus_applied, armorApplied: armorValue, weapon, debuffMultiplier: debuffMultiplier !== 1.0 ? debuffMultiplier : undefined };
 }
 
 function round(value: number, decimals: number): number {
@@ -193,9 +201,12 @@ function round(value: number, decimals: number): number {
   return Math.round(value * f) / f;
 }
 
-function computeMetrics(attacker: CombatEntity, defender: CombatEntity): VersusMetrics {
-  const attackData = computeEffectiveDamage(attacker, defender);
-  const weapon = attackData.weapon;
+function computeMetrics(attacker: CombatEntity, defender: CombatEntity, chargeBonus: number = 0): VersusMetrics {
+  // Calculer le dégât du premier coup avec le bonus de charge
+  const firstAttackData = computeEffectiveDamage(attacker, defender, chargeBonus, true);
+  // Calculer le dégât des coups suivants sans le bonus de charge
+  const normalAttackData = computeEffectiveDamage(attacker, defender, 0, false);
+  const weapon = normalAttackData.weapon;
   const attackSpeed = weapon?.speed || 0;
   const bugAttackSpeed = attackSpeed <= 0; // bug
   let dps: number | null = null;
@@ -204,15 +215,42 @@ function computeMetrics(attacker: CombatEntity, defender: CombatEntity): VersusM
   let dpsPerCost: number | null = null;
 
   if (!bugAttackSpeed) {
-    dps = round(attackData.value / attackSpeed, 2);
-    hitsToKill = Math.ceil(defender.hitpoints / attackData.value);
-    timeToKill = round(hitsToKill * attackSpeed, 1); // 1 décimale
+    // HP à détruire
+    const hpToDestroy = defender.hitpoints;
+    
+    // Si on a un bonus de charge, le premier coup fait firstAttackData.value
+    // et les coups suivants font normalAttackData.value
+    if (chargeBonus > 0) {
+      // Dégâts restants après le premier coup
+      const remainingHp = hpToDestroy - firstAttackData.value;
+      if (remainingHp <= 0) {
+        // Un seul coup tue la cible
+        hitsToKill = 1;
+        timeToKill = round(attackSpeed, 1);
+      } else {
+        // Nombre de coups supplémentaires nécessaires
+        const additionalHits = Math.ceil(remainingHp / normalAttackData.value);
+        hitsToKill = 1 + additionalHits;
+        timeToKill = round(hitsToKill * attackSpeed, 1);
+      }
+      
+      // DPS = dégâts totaux / temps total
+      const totalDamage = firstAttackData.value + (hitsToKill - 1) * normalAttackData.value;
+      dps = round(totalDamage / (hitsToKill * attackSpeed), 2);
+    } else {
+      // Pas de bonus de charge, utiliser les calculs normaux
+      dps = round(normalAttackData.value / attackSpeed, 2);
+      hitsToKill = Math.ceil(hpToDestroy / normalAttackData.value);
+      timeToKill = round(hitsToKill * attackSpeed, 1);
+    }
+    
     const cost = totalCost(attacker);
     dpsPerCost = cost > 0 ? round(dps / cost, 2) : null;
   }
 
-  const debuffText = attackData.debuffMultiplier ? ` × ${attackData.debuffMultiplier} (debuff)` : '';
-  const formula = `Effective = max(1, Base(${attackData.base}) + Bonus(${attackData.bonus}) - Armor(${attackData.armorApplied})${debuffText}) = ${attackData.value}` + (weapon ? `; DPS = ${attackData.value} / ${attackSpeed}` : "");
+  const debuffText = normalAttackData.debuffMultiplier ? ` × ${normalAttackData.debuffMultiplier} (debuff)` : '';
+  const chargeText = chargeBonus > 0 ? ` + Charge(${chargeBonus})` : '';
+  const formula = `Effective = max(1, Base(${normalAttackData.base}) + Bonus(${normalAttackData.bonus})${chargeText} - Armor(${normalAttackData.armorApplied})${debuffText}) = ${normalAttackData.value}` + (weapon ? `; DPS = ${dps}` : "");
 
   return {
     id: attacker.id,
@@ -221,16 +259,19 @@ function computeMetrics(attacker: CombatEntity, defender: CombatEntity): VersusM
     dpsPerCost,
     hitsToKill,
     timeToKill,
-    effectiveDamagePerHit: attackData.value,
+    effectiveDamagePerHit: normalAttackData.value,
     bugAttackSpeed,
     formula,
   };
 }
 
 // Compute metrics with multipliers (for At Equal Cost mode)
-function computeMetricsWithMultiplier(attacker: CombatEntity, defender: CombatEntity, attackerMultiplier: number, defenderMultiplier: number): VersusMetrics {
-  const attackData = computeEffectiveDamage(attacker, defender);
-  const weapon = attackData.weapon;
+function computeMetricsWithMultiplier(attacker: CombatEntity, defender: CombatEntity, attackerMultiplier: number, defenderMultiplier: number, chargeBonus: number = 0): VersusMetrics {
+  // Calculer le dégât du premier coup avec le bonus de charge
+  const firstAttackData = computeEffectiveDamage(attacker, defender, chargeBonus, true);
+  // Calculer le dégât des coups suivants sans le bonus de charge
+  const normalAttackData = computeEffectiveDamage(attacker, defender, 0, false);
+  const weapon = normalAttackData.weapon;
   const attackSpeed = weapon?.speed || 0;
   const bugAttackSpeed = attackSpeed <= 0;
   let dps: number | null = null;
@@ -239,25 +280,51 @@ function computeMetricsWithMultiplier(attacker: CombatEntity, defender: CombatEn
   let dpsPerCost: number | null = null;
 
   if (!bugAttackSpeed) {
-    // DPS reste le même par unité, mais le nombre d'unités multiplie le DPS total
-    const unitDPS = round(attackData.value / attackSpeed, 2);
-    dps = round(unitDPS * attackerMultiplier, 2); // DPS total de N unités attaquantes
-    
-    // Hits to kill pour tuer TOUTES les unités défensives
     // Total HP à détruire = HP d'une unité × nombre d'unités défensives
     const totalDefenderHP = defender.hitpoints * defenderMultiplier;
     
-    // Avec N unités attaquantes, on fait N * attackData.value de dégâts par cycle
-    const effectiveDamagePerCycle = attackData.value * attackerMultiplier;
-    hitsToKill = Math.ceil(totalDefenderHP / effectiveDamagePerCycle);
+    // Dégâts par cycle d'attaque
+    // Avec N unités attaquantes, le premier cycle fait :
+    // - N * firstAttackData.value de dégâts (charge bonus appliqué une seule fois)
+    // - Les cycles suivants font N * normalAttackData.value
+    if (chargeBonus > 0) {
+      const firstCycleDamage = firstAttackData.value * attackerMultiplier;
+      const normalCycleDamage = normalAttackData.value * attackerMultiplier;
+      
+      if (firstCycleDamage >= totalDefenderHP) {
+        // Un seul cycle tue toutes les unités
+        hitsToKill = 1;
+        timeToKill = round(attackSpeed, 1);
+      } else {
+        // Dégâts restants après le premier cycle
+        const remainingHp = totalDefenderHP - firstCycleDamage;
+        const additionalHits = Math.ceil(remainingHp / normalCycleDamage);
+        hitsToKill = 1 + additionalHits;
+        timeToKill = round(hitsToKill * attackSpeed, 1);
+      }
+      
+      // DPS = dégâts totaux / temps total
+      const totalDamage = firstCycleDamage + (hitsToKill - 1) * normalCycleDamage;
+      dps = round(totalDamage / (hitsToKill * attackSpeed), 2);
+    } else {
+      // Pas de bonus de charge, utiliser les calculs normaux
+      const unitDPS = round(normalAttackData.value / attackSpeed, 2);
+      dps = round(unitDPS * attackerMultiplier, 2); // DPS total de N unités attaquantes
+      
+      // Avec N unités attaquantes, on fait N * normalAttackData.value de dégâts par cycle
+      const effectiveDamagePerCycle = normalAttackData.value * attackerMultiplier;
+      hitsToKill = Math.ceil(totalDefenderHP / effectiveDamagePerCycle);
+      
+      timeToKill = round(hitsToKill * attackSpeed, 1);
+    }
     
-    timeToKill = round(hitsToKill * attackSpeed, 1);
-    
+    const unitDPS = round(normalAttackData.value / attackSpeed, 2);
     const cost = totalCost(attacker);
     dpsPerCost = cost > 0 ? round(unitDPS / cost, 2) : null; // DPS/Cost reste le même
   }
 
-  const formula = `${attackerMultiplier} × [Effective = max(1, Base(${attackData.base}) + Bonus(${attackData.bonus}) - Armor(${attackData.armorApplied})) = ${attackData.value}] vs ${defenderMultiplier} defenders` + (weapon ? `; Total DPS = ${attackData.value} / ${attackSpeed} × ${attackerMultiplier}` : "");
+  const chargeText = chargeBonus > 0 ? ` + Charge(${chargeBonus})` : '';
+  const formula = `${attackerMultiplier} × [Effective = max(1, Base(${normalAttackData.base}) + Bonus(${normalAttackData.bonus})${chargeText} - Armor(${normalAttackData.armorApplied})) = ${normalAttackData.value}] vs ${defenderMultiplier} defenders` + (weapon ? `; Total DPS = ${dps}` : "");
 
   return {
     id: attacker.id,
@@ -266,7 +333,7 @@ function computeMetricsWithMultiplier(attacker: CombatEntity, defender: CombatEn
     dpsPerCost,
     hitsToKill,
     timeToKill,
-    effectiveDamagePerHit: attackData.value,
+    effectiveDamagePerHit: normalAttackData.value,
     bugAttackSpeed,
     formula,
   };
@@ -324,12 +391,14 @@ export function computeVersus(
   a: AoE4Unit | UnifiedVariation, 
   b: AoE4Unit | UnifiedVariation,
   activeAbilitiesA?: string[],
-  activeAbilitiesB?: string[]
+  activeAbilitiesB?: string[],
+  chargeBonusA: number = 0,
+  chargeBonusB: number = 0
 ): VersusResult {
   const A = toCombatEntity(a, activeAbilitiesA);
   const B = toCombatEntity(b, activeAbilitiesB);
-  const metricsA = computeMetrics(A, B);
-  const metricsB = computeMetrics(B, A);
+  const metricsA = computeMetrics(A, B, chargeBonusA);
+  const metricsB = computeMetrics(B, A, chargeBonusB);
 
   // Détermination du gagnant via TTK (plus bas gagne), draw si proche <=5%
   let winner: "draw" | string = "draw";
@@ -357,7 +426,9 @@ export function computeVersusAtEqualCost(
   a: AoE4Unit | UnifiedVariation, 
   b: AoE4Unit | UnifiedVariation,
   activeAbilitiesA?: string[],
-  activeAbilitiesB?: string[]
+  activeAbilitiesB?: string[],
+  chargeBonusA: number = 0,
+  chargeBonusB: number = 0
 ): VersusResult & { multipliers: { multA: number; multB: number; totalCostA: number; totalCostB: number } } {
   const A = toCombatEntity(a, activeAbilitiesA);
   const B = toCombatEntity(b, activeAbilitiesB);
@@ -369,9 +440,9 @@ export function computeVersusAtEqualCost(
   
   // Calculer les métriques avec multiplicateurs
   // A attaque B: multA attaquants vs multB défenseurs
-  const metricsA = computeMetricsWithMultiplier(A, B, multipliers.multA, multipliers.multB);
+  const metricsA = computeMetricsWithMultiplier(A, B, multipliers.multA, multipliers.multB, chargeBonusA);
   // B attaque A: multB attaquants vs multA défenseurs
-  const metricsB = computeMetricsWithMultiplier(B, A, multipliers.multB, multipliers.multA);
+  const metricsB = computeMetricsWithMultiplier(B, A, multipliers.multB, multipliers.multA, chargeBonusB);
 
   // Calculer les unités restantes pour les deux camps
   let unitsRemainingA: number = 0;

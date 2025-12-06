@@ -113,6 +113,41 @@ const categoryIcons: Record<string, string> = {
 
 const categoryOrder = ['melee_infantry', 'ranged', 'cavalry', 'siege', 'monk', 'ship', 'other'];
 
+// Fonction pour calculer le bonus de charge pour une unité
+const getChargeBonus = (unitData: AoE4Unit | UnifiedVariation | undefined, activeAbilities: Set<string>, age: number): number => {
+  if (!activeAbilities.has('charge-attack') || !unitData) return 0;
+  
+  // Obtenir l'ID de base pour les variations
+  const baseId = ('baseId' in unitData) ? unitData.baseId : unitData.id;
+  const unitClasses = unitData.classes || [];
+  
+  const isKnight = unitClasses.some(c => c.toLowerCase() === 'knight');
+  const isGhulam = baseId === 'ghulam' || unitClasses.some(c => c.toLowerCase() === 'merc_ghulam');
+  
+  if (!isKnight && !isGhulam) return 0;
+  
+  // Bonus de charge selon l'âge
+  if (isKnight) {
+    switch (age) {
+      case 2: return 10; // Early
+      case 3: return 12; // Regular
+      case 4: return 14; // Elite
+      default: return 0;
+    }
+  }
+  
+  // Bonus pour Ghulam (pas de variant Early)
+  if (isGhulam) {
+    switch (age) {
+      case 3: return 5;  // Regular
+      case 4: return 6;  // Elite
+      default: return 0;
+    }
+  }
+  
+  return 0;
+};
+
 const Sandbox = () => {
   const navigate = useNavigate();
   const [isVersus, setIsVersus] = useState<boolean>(false); // toggle Versus vs Comparative
@@ -330,7 +365,7 @@ const Sandbox = () => {
     const baseStats: UnitStats = {
       hitpoints: allyData.hitpoints,
       meleeAttack: allyWeapon?.type === 'melee' ? (allyWeapon.damage || 0) : 0,
-      rangedAttack: allyWeapon?.type === 'ranged' ? (allyWeapon.damage || 0) : 0,
+      rangedAttack: (allyWeapon?.type === 'ranged' || allyWeapon?.type === 'siege') ? (allyWeapon.damage || 0) : 0,
       meleeArmor: getArmorValue(allyData, "melee"),
       rangedArmor: getArmorValue(allyData, "ranged"),
       moveSpeed: 'movement' in allyData ? allyData.movement?.speed || 0 : 0,
@@ -377,7 +412,7 @@ const Sandbox = () => {
     const baseStats: UnitStats = {
       hitpoints: enemyData.hitpoints,
       meleeAttack: enemyWeapon?.type === 'melee' ? (enemyWeapon.damage || 0) : 0,
-      rangedAttack: enemyWeapon?.type === 'ranged' ? (enemyWeapon.damage || 0) : 0,
+      rangedAttack: (enemyWeapon?.type === 'ranged' || enemyWeapon?.type === 'siege') ? (enemyWeapon.damage || 0) : 0,
       meleeArmor: getArmorValue(enemyData, "melee"),
       rangedArmor: getArmorValue(enemyData, "ranged"),
       moveSpeed: 'movement' in enemyData ? enemyData.movement?.speed || 0 : 0,
@@ -551,6 +586,7 @@ const Sandbox = () => {
     attackSpeed: modifiedAllyStats.attackSpeed || 0,
     maxRange: modifiedAllyStats.maxRange || 0,
     bonusDamage: modifiedAllyStats.bonusDamage || [],
+    chargeBonus: getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly),
     cost: variationAlly ? getTotalCostFromVariation(variationAlly) : (unit1 ? getTotalCost(unit1) : 0),
     costs: variationAlly ? variationAlly.costs : (unit1 ? unit1.costs : undefined)
   } : null;
@@ -575,6 +611,7 @@ const Sandbox = () => {
     attackSpeed: modifiedEnemyStats.attackSpeed || 0,
     maxRange: modifiedEnemyStats.maxRange || 0,
     bonusDamage: modifiedEnemyStats.bonusDamage || [],
+    chargeBonus: getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy),
     cost: variationEnemy ? getTotalCostFromVariation(variationEnemy) : (unit2 ? getTotalCost(unit2) : 0),
     costs: variationEnemy ? variationEnemy.costs : (unit2 ? unit2.costs : undefined)
   } : null;
@@ -588,6 +625,35 @@ const Sandbox = () => {
   const matchedTargets = new Set<string>();
   const alignedAllyBonuses: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
   const alignedEnemyBonuses: any[] = []; // eslint-disable-line @typescript-eslint/no-explicit-any
+  
+  // Phase 0: Ajouter le bonus de charge en première ligne SEULEMENT si au moins une unité l'a
+  const allyHasChargeBonus = allyStats?.chargeBonus && allyStats.chargeBonus > 0;
+  const enemyHasChargeBonus = enemyStats?.chargeBonus && enemyStats.chargeBonus > 0;
+  
+  let allyChargeLineIndex = -1;
+  let enemyChargeLineIndex = -1;
+  
+  if (allyHasChargeBonus || enemyHasChargeBonus) {
+    if (allyHasChargeBonus) {
+      alignedAllyBonuses.push({ 
+        isChargeBonus: true, 
+        value: allyStats?.chargeBonus 
+      });
+      allyChargeLineIndex = 0;
+    } else {
+      alignedAllyBonuses.push({ hidden: true });
+    }
+    
+    if (enemyHasChargeBonus) {
+      alignedEnemyBonuses.push({ 
+        isChargeBonus: true, 
+        value: enemyStats?.chargeBonus 
+      });
+      enemyChargeLineIndex = 0;
+    } else {
+      alignedEnemyBonuses.push({ hidden: true });
+    }
+  }
   
   // Phase 1: Ajouter les bonus communs (alignés)
   allyBonuses.forEach((allyBonus: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
@@ -615,18 +681,34 @@ const Sandbox = () => {
     return !matchedTargets.has(target);
   });
   
-  // Ajouter les bonus non-matchés avec des lignes vides pour maintenir l'alignement
-  const maxUnmatched = Math.max(unmatchedAlly.length, unmatchedEnemy.length);
+  // Phase 3: Combler les lignes vides créées par le charge bonus avec les premiers bonus non-matchés
+  let allyUnmatchedIndex = 0;
+  let enemyUnmatchedIndex = 0;
+  
+  if (allyChargeLineIndex === -1 && alignedAllyBonuses.length > 0 && alignedAllyBonuses[0]?.hidden && unmatchedAlly.length > 0) {
+    alignedAllyBonuses[0] = unmatchedAlly[0];
+    allyUnmatchedIndex = 1;
+  }
+  
+  if (enemyChargeLineIndex === -1 && alignedEnemyBonuses.length > 0 && alignedEnemyBonuses[0]?.hidden && unmatchedEnemy.length > 0) {
+    alignedEnemyBonuses[0] = unmatchedEnemy[0];
+    enemyUnmatchedIndex = 1;
+  }
+  
+  // Phase 4: Ajouter les bonus non-matchés restants avec des lignes vides pour maintenir l'alignement
+  const remainingUnmatchedAlly = unmatchedAlly.slice(allyUnmatchedIndex);
+  const remainingUnmatchedEnemy = unmatchedEnemy.slice(enemyUnmatchedIndex);
+  const maxUnmatched = Math.max(remainingUnmatchedAlly.length, remainingUnmatchedEnemy.length);
   
   for (let i = 0; i < maxUnmatched; i++) {
-    if (i < unmatchedAlly.length) {
-      alignedAllyBonuses.push(unmatchedAlly[i]);
+    if (i < remainingUnmatchedAlly.length) {
+      alignedAllyBonuses.push(remainingUnmatchedAlly[i]);
     } else {
       alignedAllyBonuses.push({ hidden: true });
     }
     
-    if (i < unmatchedEnemy.length) {
-      alignedEnemyBonuses.push(unmatchedEnemy[i]);
+    if (i < remainingUnmatchedEnemy.length) {
+      alignedEnemyBonuses.push(remainingUnmatchedEnemy[i]);
     } else {
       alignedEnemyBonuses.push({ hidden: true });
     }
@@ -953,6 +1035,8 @@ const Sandbox = () => {
                       bonusDamage={alignedAllyBonuses}
                       compareBonusDamage={alignedEnemyBonuses}
                       maxBonusDamageLines={maxBonusDamageLines}
+                      chargeBonus={allyStats?.chargeBonus}
+                      compareChargeBonus={enemyStats?.chargeBonus}
                       compareCost={enemyStats?.cost}
                     />
                   </div>
@@ -985,6 +1069,8 @@ const Sandbox = () => {
                       bonusDamage={alignedEnemyBonuses}
                       compareBonusDamage={alignedAllyBonuses}
                       maxBonusDamageLines={maxBonusDamageLines}
+                      chargeBonus={enemyStats?.chargeBonus}
+                      compareChargeBonus={allyStats?.chargeBonus}
                       compareCost={allyStats?.cost}
                     />
                   </div>
@@ -1035,12 +1121,18 @@ const Sandbox = () => {
               const abilitiesArrayAlly = Array.from(activeAbilitiesAlly);
               const abilitiesArrayEnemy = Array.from(activeAbilitiesEnemy);
               
+              // Calculer les bonus de charge
+              const chargeAlly = getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly);
+              const chargeEnemy = getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy);
+              
               if (atEqualCost) {
                 const result = computeVersusAtEqualCost(
                   modifiedVariationAlly || modifiedUnit1!, 
                   modifiedVariationEnemy || modifiedUnit2!,
                   abilitiesArrayAlly,
-                  abilitiesArrayEnemy
+                  abilitiesArrayEnemy,
+                  chargeAlly,
+                  chargeEnemy
                 );
                 versusData = result;
                 multipliers = result.multipliers;
@@ -1049,7 +1141,9 @@ const Sandbox = () => {
                   modifiedVariationAlly || modifiedUnit1!, 
                   modifiedVariationEnemy || modifiedUnit2!,
                   abilitiesArrayAlly,
-                  abilitiesArrayEnemy
+                  abilitiesArrayEnemy,
+                  chargeAlly,
+                  chargeEnemy
                 );
               }
               

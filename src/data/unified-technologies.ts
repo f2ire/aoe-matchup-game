@@ -74,7 +74,9 @@ const combatProperties = [
   'moveSpeed',
   'maxRange',         // Portée maximale
   'attackSpeed',      // Vitesse d'attaque
-  'bonusDamage'       // Dégâts bonus
+  'bonusDamage',      // Dégâts bonus
+  'siegeAttack',      // Dégâts de siège (propriété spéciale aux armes siege)
+  'gunpowderAttack'   // Dégâts de poudre à canon (propriété spéciale aux armes gunpowder)
 ];
 
 // Classes de cibles non-combattantes à exclure
@@ -294,7 +296,18 @@ export function applyTechnologyEffects(
   // Faire une copie profonde des bonusDamage pour éviter les mutations
   const modifiedStats = { 
     ...baseStats,
-    bonusDamage: baseStats.bonusDamage ? baseStats.bonusDamage.map(bonus => ({ ...bonus, classes: [...(bonus.classes || [])] })) : []
+    bonusDamage: baseStats.bonusDamage ? baseStats.bonusDamage.map((bonus: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+      // Copie profonde en gérant les structures différentes
+      const copy = { ...bonus };
+      if (bonus.classes) copy.classes = [...bonus.classes];
+      if (bonus.target?.class) {
+        copy.target = {
+          ...bonus.target,
+          class: bonus.target.class.map((c: any) => Array.isArray(c) ? [...c] : c) // eslint-disable-line @typescript-eslint/no-explicit-any
+        };
+      }
+      return copy;
+    }) : []
   };
 
   // Collecter tous les effets applicables
@@ -368,7 +381,7 @@ export function applyTechnologyEffects(
       }
 
       // Traiter les bonus de dégâts (type: 'bonus')
-      if ((property === 'meleeAttack' || property === 'rangedAttack') && effect.type === 'bonus') {
+      if ((property === 'meleeAttack' || property === 'rangedAttack' || property === 'siegeAttack' || property === 'gunpowderAttack') && effect.type === 'bonus') {
         specialEffects.push({
           property,
           effectType: effect.effect as 'change' | 'multiply',
@@ -470,13 +483,26 @@ export function applyTechnologyEffects(
   if (modifiedStats.bonusDamage && Array.isArray(modifiedStats.bonusDamage)) {
     for (const effect of specialEffects) {
       if (effect.type === 'bonus' && effect.target?.class) {
-        // Chercher si un bonus contre cette cible existe déjà
-        const targetClasses = effect.target.class.flat();
-        const existingBonus = modifiedStats.bonusDamage.find((bonus: { classes?: string[] }) => {
-          if (!bonus.classes) return false;
-          return targetClasses.every(tc => 
-            bonus.classes?.some((bc: string) => bc.toLowerCase() === tc.toLowerCase())
-          );
+        // Flatten et normaliser les cibles de l'effect
+        const effectTargetClasses = effect.target.class.flat().map((c: string) => c.toLowerCase());
+        
+        const existingBonus = modifiedStats.bonusDamage.find((bonus: any) => { // eslint-disable-line @typescript-eslint/no-explicit-any
+          // Chercher par classes (pour les bonus créés par les technologies)
+          if (bonus.classes && Array.isArray(bonus.classes)) {
+            const bonusClasses = bonus.classes.map((c: string) => c.toLowerCase());
+            // Les sets doivent être identiques
+            return effectTargetClasses.length === bonusClasses.length &&
+              effectTargetClasses.every(tc => bonusClasses.includes(tc));
+          }
+          
+          // Chercher par property et target.class (pour les modifiers de weapon originaux)
+          if (bonus.property && bonus.target?.class) {
+            const bonusTargetClasses = bonus.target.class.flat().map((c: string) => c.toLowerCase());
+            // Les sets doivent être identiques
+            return effectTargetClasses.length === bonusTargetClasses.length &&
+              effectTargetClasses.every(tc => bonusTargetClasses.includes(tc));
+          }
+          return false;
         });
 
         if (existingBonus) {
@@ -487,11 +513,14 @@ export function applyTechnologyEffects(
             existingBonus.value *= effect.value;
           }
         } else {
-          // Ajouter un nouveau bonus
+          // Ajouter un nouveau bonus (seulement si c'est une addition, pas une multiplication)
           if (effect.effectType === 'change') {
             modifiedStats.bonusDamage.push({
               value: effect.value,
-              classes: targetClasses
+              property: effect.property,
+              target: {
+                class: effect.target.class
+              }
             });
           }
         }
@@ -626,7 +655,10 @@ export function categorizeTechnology(tech: Technology): string {
   const isSeparateTech = tech.unique || !hasTier;
 
   // Si la technologie a plusieurs propriétés différentes, la mettre dans "Other"
+  // SAUF si toutes les propriétés sont des attaques (meleeAttack, rangedAttack, siegeAttack, gunpowderAttack)
   const uniqueProperties = new Set(effects.map(e => e.property));
+  const attackProps = new Set(['meleeAttack', 'rangedAttack', 'siegeAttack', 'gunpowderAttack']);
+  const allAttacks = [...uniqueProperties].every(p => attackProps.has(p));
   
   // Si la techno fait partie d'une famille X/Y, utiliser la catégorie du premier palier
   // pour assurer que toute la famille reste dans la même catégorie
@@ -651,7 +683,8 @@ export function categorizeTechnology(tech: Technology): string {
       : (uniqueProperties.has('rangedArmor') ? 'Armor-Ranged' : 'Armor-Melee');
   }
 
-  if (uniqueProperties.size > 1) {
+  // Si plusieurs propriétés et que ce ne sont pas toutes des attaques
+  if (uniqueProperties.size > 1 && !allAttacks) {
     return 'Other';
   }
   
@@ -663,6 +696,12 @@ export function categorizeTechnology(tech: Technology): string {
       return isSeparateTech ? 'Attack-Melee-Unique' : 'Attack-Melee';
     }
     if (effect.property === 'rangedAttack') {
+      return isSeparateTech ? 'Attack-Ranged-Unique' : 'Attack-Ranged';
+    }
+    if (effect.property === 'siegeAttack') {
+      return isSeparateTech ? 'Attack-Ranged-Unique' : 'Attack-Ranged';
+    }
+    if (effect.property === 'gunpowderAttack') {
       return isSeparateTech ? 'Attack-Ranged-Unique' : 'Attack-Ranged';
     }
     if (effect.property === 'meleeArmor') {
