@@ -4,6 +4,41 @@ import { deepMerge } from './types';
 // IMPORTANT: on ne dépend ici d'aucune valeur runtime de unified-units.ts pour éviter les cycles.
 // Les structures sont manipulées par forme (shape) avec deepMerge.
 
+// Fonction helper pour transformer les arrays de classes multi-valeurs en identifiants combinés
+function transformMultiClassTargets(value: unknown): unknown {
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number') return value;
+  if (typeof value === 'boolean') return value;
+  if (value === null) return value;
+  
+  if (Array.isArray(value)) {
+    // Vérifier si c'est un array de 2 strings (["archer", "ship"] -> "archer_ship")
+    if (
+      value.length === 2 &&
+      typeof value[0] === 'string' &&
+      typeof value[1] === 'string' &&
+      !value.some(v => typeof v === 'object')
+    ) {
+      // C'est potentiellement un multi-class target
+      // On le transforme en identifiant combiné
+      return value.join('_');
+    }
+    // Sinon, appliquer la transformation récursivement
+    return value.map(v => transformMultiClassTargets(v));
+  }
+  
+  if (typeof value === 'object' && value !== null) {
+    const obj = value as Record<string, unknown>;
+    const result: Record<string, unknown> = {};
+    for (const [key, val] of Object.entries(obj)) {
+      result[key] = transformMultiClassTargets(val);
+    }
+    return result;
+  }
+  
+  return value;
+}
+
 export const unitPatches: UnitUnifiedPatch<unknown, unknown>[] = [
   // Culverin: Transform multi-class targets to underscored single classes
   {
@@ -52,34 +87,36 @@ export function applyUnitPatches(unifiedUnits: unknown[]): unknown[] {
 
   return unifiedUnits.map((unit) => {
     const u = unit as Record<string, unknown>;
+    
+    // Appliquer la transformation globale des multi-class targets
+    let updated = transformMultiClassTargets(u);
+    
     const patch = unitPatches.find(p => p.id === u.id);
-    if (!patch) return unit;
+    if (!patch) return updated;
 
-    let updated: Record<string, unknown> = patch.update ? (deepMerge(u, patch.update) as Record<string, unknown>) : { ...u };
+    updated = patch.update ? (deepMerge(updated, patch.update) as Record<string, unknown>) : { ...updated as Record<string, unknown> };
 
-    if (patch.variations?.length && Array.isArray(updated.variations)) {
-      updated = {
-        ...updated,
-        variations: (updated.variations as unknown[]).map((v: unknown) => {
-          const vData = v as Record<string, unknown>;
-          const vPatch = patch.variations!.find(vp => {
-            if (vp.match.id && vp.match.id !== vData.id) return false;
-            if (
-              typeof vp.match.age === 'number' &&
-              typeof vData.age === 'number' &&
-              vp.match.age !== vData.age
-            ) return false;
-            if (vp.match.civsIncludes && Array.isArray(vData.civs) && !vData.civs.includes?.(vp.match.civsIncludes)) return false;
-            return true;
-          });
-          let updated_variation: Record<string, unknown> = vPatch ? (deepMerge(vData, vPatch.update) as Record<string, unknown>) : vData;
-          // Apply after function at variation level if provided
-          if (vPatch?.after) {
-            updated_variation = vPatch.after(updated_variation) as Record<string, unknown>;
-          }
-          return updated_variation;
-        })
-      };
+    if (patch.variations?.length && Array.isArray((updated as Record<string, unknown>).variations)) {
+      const updatedRecord = updated as Record<string, unknown>;
+      updatedRecord.variations = ((updatedRecord.variations) as unknown[]).map((v: unknown) => {
+        const vData = v as Record<string, unknown>;
+        const vPatch = patch.variations!.find(vp => {
+          if (vp.match.id && vp.match.id !== vData.id) return false;
+          if (
+            typeof vp.match.age === 'number' &&
+            typeof vData.age === 'number' &&
+            vp.match.age !== vData.age
+          ) return false;
+          if (vp.match.civsIncludes && Array.isArray(vData.civs) && !vData.civs.includes?.(vp.match.civsIncludes)) return false;
+          return true;
+        });
+        let updated_variation: Record<string, unknown> = vPatch ? (deepMerge(vData, vPatch.update) as Record<string, unknown>) : vData;
+        // Apply after function at variation level if provided
+        if (vPatch?.after) {
+          updated_variation = vPatch.after(updated_variation) as Record<string, unknown>;
+        }
+        return updated_variation;
+      });
     }
 
     if (patch.after) {

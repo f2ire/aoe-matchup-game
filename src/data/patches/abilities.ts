@@ -28,6 +28,20 @@ export const abilityPatches: TechnologyPatch<Ability, AbilityVariation>[] = [
         }
       ]
     }
+  },
+  {
+    id: 'ability-conversion',
+    after: (ability: Ability) => ({
+      ...ability,
+      hidden: true
+    })
+  },
+  {
+    id: 'ability-proselytize',
+    after: (ability: Ability) => ({
+      ...ability,
+      hidden: true
+    })
   }
 ];
 

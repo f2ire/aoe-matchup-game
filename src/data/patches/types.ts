@@ -52,10 +52,10 @@ export function deepMerge<T>(base: T, patch: DeepPartial<T>): T {
   if (typeof base !== 'object' || base === null) return (patch as T) ?? base;
   if (Array.isArray(base)) return (patch as unknown as T) ?? base;
 
-  const result: any = { ...base };
+  const result = { ...base } as Record<string, unknown>;
   for (const key of Object.keys(patch as object)) {
-    const bVal: any = (base as any)[key];
-    const pVal: any = (patch as any)[key];
+    const bVal = (base as Record<string, unknown>)[key];
+    const pVal = (patch as Record<string, unknown>)[key];
     if (pVal && typeof pVal === 'object' && !Array.isArray(pVal)) {
       result[key] = deepMerge(bVal, pVal);
     } else if (pVal !== undefined) {

@@ -76,7 +76,8 @@ const combatProperties = [
   'attackSpeed',      // Vitesse d'attaque
   'bonusDamage',      // Dégâts bonus
   'siegeAttack',      // Dégâts de siège (propriété spéciale aux armes siege)
-  'gunpowderAttack'   // Dégâts de poudre à canon (propriété spéciale aux armes gunpowder)
+  'gunpowderAttack',  // Dégâts de poudre à canon (propriété spéciale aux armes gunpowder)
+  'burst'             // Nombre de projectiles
 ];
 
 // Classes de cibles non-combattantes à exclure
@@ -284,6 +285,7 @@ export interface UnitStats {
   moveSpeed: number;
   attackSpeed?: number;
   maxRange?: number;
+  burst?: number;
   bonusDamage?: any[]; // eslint-disable-line @typescript-eslint/no-explicit-any
 }
 
@@ -371,7 +373,7 @@ export function applyTechnologyEffects(
       if (!combatProperties.includes(property)) continue;
 
       // Traiter les propriétés spéciales
-      if (property === 'maxRange' || property === 'attackSpeed') {
+      if (property === 'maxRange' || property === 'attackSpeed' || property === 'burst') {
         specialEffects.push({
           property,
           effectType: effect.effect as 'change' | 'multiply',
@@ -475,6 +477,17 @@ export function applyTechnologyEffects(
         modifiedStats.attackSpeed += effect.value;
       } else if (effect.effectType === 'multiply') {
         modifiedStats.attackSpeed *= effect.value;
+      }
+    }
+  }
+  
+  // Appliquer burst
+  for (const effect of specialEffects) {
+    if (effect.property === 'burst' && typeof modifiedStats.burst === 'number') {
+      if (effect.effectType === 'change') {
+        modifiedStats.burst += effect.value;
+      } else if (effect.effectType === 'multiply') {
+        modifiedStats.burst *= effect.value;
       }
     }
   }

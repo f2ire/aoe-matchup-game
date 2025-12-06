@@ -2,7 +2,7 @@ import React from 'react';
 import { AoE4Unit, getPrimaryWeapon, getArmorValue, getTotalCost, getTotalCostFromVariation } from '@/data/unified-units';
 import type { UnifiedVariation } from '@/data/unified-units';
 import { Card, CardHeader, CardContent, CardFooter } from '@/components/ui/card';
-import { cn } from '@/lib/utils';
+import { cn, formatClassNames } from '@/lib/utils';
 import { useState } from 'react';
 
 interface VersusMetricsProps {
@@ -54,6 +54,8 @@ interface UnitCardProps {
   chargeBonus?: number;
   compareChargeBonus?: number;
   compareCost?: number;
+  comparePopulation?: number;
+  compareProductionTime?: number;
 }
 
 export const UnitCard = ({
@@ -74,6 +76,8 @@ export const UnitCard = ({
   chargeBonus,
   compareChargeBonus,
   compareCost,
+  comparePopulation,
+  compareProductionTime,
   className
 }: UnitCardProps) => {
   const [showFormula, setShowFormula] = useState(false);
@@ -85,9 +89,11 @@ export const UnitCard = ({
   const rangedArmor = getArmorValue(displayData, 'ranged');
   const totalCost = variation ? getTotalCostFromVariation(variation) : (unit ? getTotalCost(unit) : 0);
   const costs = variation ? variation.costs : unit!.costs;
+  const productionTime = (costs as unknown as { time?: number })?.time;
   const movement = 'movement' in displayData ? displayData.movement : undefined;
   const civs = displayData.civs;
-  const population = 'population' in displayData ? (displayData as unknown as { population?: number }).population : undefined;
+  const population = 'costs' in displayData && (displayData as unknown as { costs?: { popcap?: number } }).costs?.popcap;
+
 
   const getComparisonColor = (myValue: number, compareValue?: number, higherIsBetter: boolean = true, minDiff: number = 0.05, isAbsoluteThreshold: boolean = false) => {
     if (compareValue === undefined) return { color: '', symbol: '' };
@@ -142,11 +148,11 @@ export const UnitCard = ({
       
       if (applies) {
         const val = (mod.value ?? mod.amount ?? 0) as number;
-        const targetName = groups.map((g: string[]) => g.join(' + ')).join(' OU ');
+        const targetName = formatClassNames(groups.flat());
         console.log(`%c✓ Bonus appliqué: +${val} vs ${targetName}`, 'color: #51cf66; font-weight: bold;');
         applicableBonus += val;
       } else {
-        const targetName = groups.map((g: string[]) => g.join(' + ')).join(' OU ');
+        const targetName = formatClassNames(groups.flat());
         console.log(`%c✗ Bonus NON appliqué: vs ${targetName}`, 'color: #ffa94d;');
       }
     }
@@ -222,9 +228,9 @@ export const UnitCard = ({
               <div className="flex flex-col">
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Attack</span>
-                  <span className={cn('flex items-center gap-1', getComparisonColor(primaryWeapon.damage || 0, compareAttack).color)}>
-                    {getComparisonColor(primaryWeapon.damage || 0, compareAttack).symbol && <span className="text-xs">{getComparisonColor(primaryWeapon.damage || 0, compareAttack).symbol}</span>}
-                    {Math.round(primaryWeapon.damage || 0)} ({primaryWeapon.type})
+                  <span className={cn('flex items-center gap-1', getComparisonColor((primaryWeapon.damage || 0) * (primaryWeapon.burst?.count || 1), compareAttack).color)}>
+                    {getComparisonColor((primaryWeapon.damage || 0) * (primaryWeapon.burst?.count || 1), compareAttack).symbol && <span className="text-xs">{getComparisonColor((primaryWeapon.damage || 0) * (primaryWeapon.burst?.count || 1), compareAttack).symbol}</span>}
+                    {Math.round(primaryWeapon.damage || 0)}{primaryWeapon.burst?.count && primaryWeapon.burst.count > 1 ? ` × ${primaryWeapon.burst.count}` : ''} ({primaryWeapon.type})
                   </span>
                 </div>
                 {(bonusDamage && bonusDamage.length > 0) || maxBonusDamageLines ? (
@@ -249,7 +255,7 @@ export const UnitCard = ({
                       }
                       
                       const targetClasses = modifier.target?.class?.flat() || [];
-                      const targetName = targetClasses.join(' ') || 'Unknown';
+                      const targetName = formatClassNames(targetClasses);
                       const compareModifier = compareBonusDamage?.[idx];
                       let comparison = { color: '', symbol: '' };
                       if (compareModifier && !compareModifier.hidden) {
@@ -264,7 +270,7 @@ export const UnitCard = ({
                             {comparison.symbol && <span className="text-[10px]">{comparison.symbol}</span>}
                             +{Math.round(modifier.value)} vs
                           </span>
-                          <span className="capitalize">{targetName}</span>
+                          <span>{targetName}</span>
                         </div>
                       );
                     })}
@@ -309,6 +315,25 @@ export const UnitCard = ({
                 <span className={cn('flex items-center gap-1', getComparisonColor(movement.speed, compareSpeed).color)}>
                   {getComparisonColor(movement.speed, compareSpeed).symbol && <span className="text-xs">{getComparisonColor(movement.speed, compareSpeed).symbol}</span>}
                   {movement.speed.toFixed(3)}
+                </span>
+              </div>
+            )}
+            <div className="border-t border-border my-2" />
+            {population && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Population</span>
+                <span className={cn('flex items-center gap-1', getComparisonColor(population, comparePopulation, false, 0.01, true).color)}>
+                  {getComparisonColor(population, comparePopulation, false, 0.01, true).symbol && <span className="text-xs">{getComparisonColor(population, comparePopulation, false, 0.01, true).symbol}</span>}
+                  {population}
+                </span>
+              </div>
+            )}
+            {productionTime && (
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Production Time</span>
+                <span className={cn('flex items-center gap-1', getComparisonColor(productionTime, compareProductionTime, false).color)}>
+                  {getComparisonColor(productionTime, compareProductionTime, false).symbol && <span className="text-xs">{getComparisonColor(productionTime, compareProductionTime, false).symbol}</span>}
+                  {productionTime}s
                 </span>
               </div>
             )}
@@ -419,7 +444,7 @@ export const UnitCard = ({
                   </span>
                 </div>
               </div>
-              {versusMetrics.bugAttackSpeed && <p className="col-span-2 text-xs text-red-500">Bug: attack speed = 0 (data)</p>}
+              {/* Message d'erreur supprimé - les stats de base s'affichent toujours */}
             </div>
             
             {/* Informations supplémentaires pour le gagnant en mode At Equal Cost */}
@@ -456,14 +481,20 @@ export const UnitCard = ({
           </div>
         )}
       </div>
-      {primaryWeapon && mode === 'versus' && (
+      {mode === 'versus' && (
         <CardFooter className="pt-2">
           <div className="w-full rounded-md bg-muted/40 p-2 text-[11px] leading-tight">
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <div className="flex justify-between"><span className="text-muted-foreground">Atk</span><span>{Math.round(primaryWeapon.damage || 0)}{applicableBonus > 0 && ` + ${Math.round(applicableBonus)}`}</span></div>
-                {primaryWeapon.speed && <div className="flex justify-between"><span className="text-muted-foreground">AS</span><span>{primaryWeapon.speed.toFixed(3)}s</span></div>}
-                <div className="flex justify-between"><span className="text-muted-foreground">Range</span><span>{primaryWeapon.range.max}</span></div>
+                {primaryWeapon ? (
+                  <>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Atk</span><span>{Math.round(primaryWeapon.damage || 0)}{primaryWeapon.burst?.count && primaryWeapon.burst.count > 1 ? `×${primaryWeapon.burst.count}` : ''}{applicableBonus > 0 && ` + ${Math.round(applicableBonus)}`}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">AS</span><span>{primaryWeapon.speed ? primaryWeapon.speed.toFixed(3) + 's' : '—'}</span></div>
+                    <div className="flex justify-between"><span className="text-muted-foreground">Range</span><span>{primaryWeapon.range.max}</span></div>
+                  </>
+                ) : (
+                  <div className="text-muted-foreground italic">No weapon</div>
+                )}
               </div>
               <div>
                 <div className="flex justify-between"><span className="text-muted-foreground">HP</span><span>{Math.round(displayData.hitpoints)}</span></div>
@@ -474,8 +505,6 @@ export const UnitCard = ({
 
             <div className="border-t border-border my-2" />
 
-
-
             <div className="flex justify-between">
               <span className="text-muted-foreground">Population</span>
               <span>{population ?? '—'}</span>
@@ -484,6 +513,11 @@ export const UnitCard = ({
             <div className="flex justify-between">
               <span className="text-muted-foreground">Total Cost</span>
               <span>{Math.round(totalCost)}</span>
+            </div>
+
+            <div className="flex justify-between">
+              <span className="text-muted-foreground">Production Time</span>
+              <span>{productionTime ? `${productionTime}s` : '—'}</span>
             </div>
 
             {/* Bonus intégré dans la ligne Atk, section supprimée */}

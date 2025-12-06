@@ -345,7 +345,6 @@ const Sandbox = () => {
     });
   }, [unit2, selectedCivEnemy, selectedAgeEnemy, abilitiesEnemy]);
   
-  // Calculer les stats modifiées avec useMemo pour forcer le recalcul complet à chaque changement
   const modifiedAllyStats = useMemo(() => {
     const allyData = variationAlly || unit1;
     if (!allyData) return {
@@ -371,6 +370,7 @@ const Sandbox = () => {
       moveSpeed: 'movement' in allyData ? allyData.movement?.speed || 0 : 0,
       attackSpeed: allyWeapon?.speed || 0,
       maxRange: allyWeapon?.range?.max || 0,
+      burst: allyWeapon?.burst?.count || 1,
       bonusDamage: allyWeapon?.modifiers || []
     };
     
@@ -418,6 +418,7 @@ const Sandbox = () => {
       moveSpeed: 'movement' in enemyData ? enemyData.movement?.speed || 0 : 0,
       attackSpeed: enemyWeapon?.speed || 0,
       maxRange: enemyWeapon?.range?.max || 0,
+      burst: enemyWeapon?.burst?.count || 1,
       bonusDamage: enemyWeapon?.modifiers || []
     };
     
@@ -439,14 +440,9 @@ const Sandbox = () => {
     const withTechs = applyTechnologyEffects(baseStats, unit2?.classes || [], techVariations, unit2?.id);
     return applyTechnologyEffects(withTechs, unit2?.classes || [], abilityVariations, unit2?.id);
   }, [unit2, variationEnemy, activeTechnologiesEnemy, activeAbilitiesEnemy, selectedCivEnemy, selectedAgeEnemy]);
-  
-  // Calculer les stats pour la comparaison
-  const allyData = variationAlly || unit1;
-  const enemyData = variationEnemy || unit2;
-  
-  // Créer des variations modifiées avec les technologies appliquées
+
+  // Créer les variations avec les technologies appliquées
   const modifiedVariationAlly = variationAlly ? (() => {
-    // Calculer le debuff versus des abilités ennemies
     const debuffMultiplier = unit2 && activeAbilitiesEnemy.size > 0 
       ? getVersusDebuffMultiplier(variationAlly.classes || [], Array.from(activeAbilitiesEnemy))
       : 1.0;
@@ -462,7 +458,8 @@ const Sandbox = () => {
           ...weapon.range,
           max: modifiedAllyStats.maxRange || weapon.range.max
         } : undefined,
-        modifiers: modifiedAllyStats.bonusDamage
+        modifiers: modifiedAllyStats.bonusDamage,
+        burst: modifiedAllyStats.burst ? { count: modifiedAllyStats.burst } : weapon.burst
       })),
       armor: [
         { type: 'melee', value: modifiedAllyStats.meleeArmor },
@@ -474,9 +471,8 @@ const Sandbox = () => {
       } : undefined
     };
   })() : undefined;
-  
+
   const modifiedVariationEnemy = variationEnemy ? (() => {
-    // Calculer le debuff versus des abilités ally
     const debuffMultiplier = unit1 && activeAbilitiesAlly.size > 0 
       ? getVersusDebuffMultiplier(variationEnemy.classes || [], Array.from(activeAbilitiesAlly))
       : 1.0;
@@ -492,7 +488,8 @@ const Sandbox = () => {
           ...weapon.range,
           max: modifiedEnemyStats.maxRange || weapon.range.max
         } : undefined,
-        modifiers: modifiedEnemyStats.bonusDamage
+        modifiers: modifiedEnemyStats.bonusDamage,
+        burst: modifiedEnemyStats.burst ? { count: modifiedEnemyStats.burst } : weapon.burst
       })),
       armor: [
         { type: 'melee', value: modifiedEnemyStats.meleeArmor },
@@ -504,6 +501,10 @@ const Sandbox = () => {
       } : undefined
     };
   })() : undefined;
+  
+  // Calculer les stats pour la comparaison
+  const allyData = modifiedVariationAlly || unit1;
+  const enemyData = modifiedVariationEnemy || unit2;
   
   const modifiedUnit1 = unit1 && !variationAlly ? (() => {
     // Calculer le debuff versus des abilités ennemies
@@ -522,7 +523,8 @@ const Sandbox = () => {
           ...weapon.range,
           max: modifiedAllyStats.maxRange || weapon.range.max
         } : undefined,
-        modifiers: modifiedAllyStats.bonusDamage
+        modifiers: modifiedAllyStats.bonusDamage,
+        burst: modifiedAllyStats.burst ? { count: modifiedAllyStats.burst } : weapon.burst
       })),
       armor: [
         { type: 'melee', value: modifiedAllyStats.meleeArmor },
@@ -552,7 +554,8 @@ const Sandbox = () => {
           ...weapon.range,
           max: modifiedEnemyStats.maxRange || weapon.range.max
         } : undefined,
-        modifiers: modifiedEnemyStats.bonusDamage
+        modifiers: modifiedEnemyStats.bonusDamage,
+        burst: modifiedEnemyStats.burst ? { count: modifiedEnemyStats.burst } : weapon.burst
       })),
       armor: [
         { type: 'melee', value: modifiedEnemyStats.meleeArmor },
@@ -588,7 +591,9 @@ const Sandbox = () => {
     bonusDamage: modifiedAllyStats.bonusDamage || [],
     chargeBonus: getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly),
     cost: variationAlly ? getTotalCostFromVariation(variationAlly) : (unit1 ? getTotalCost(unit1) : 0),
-    costs: variationAlly ? variationAlly.costs : (unit1 ? unit1.costs : undefined)
+    costs: variationAlly ? variationAlly.costs : (unit1 ? unit1.costs : undefined),
+    population: 'costs' in (variationAlly || unit1 || {}) ? (variationAlly || unit1 as any)?.costs?.popcap : undefined, // eslint-disable-line @typescript-eslint/no-explicit-any
+    productionTime: 'costs' in (variationAlly || unit1 || {}) ? (variationAlly || unit1 as any)?.costs?.time : undefined // eslint-disable-line @typescript-eslint/no-explicit-any
   } : null;
   
   const enemyStats = enemyData ? {
@@ -613,7 +618,9 @@ const Sandbox = () => {
     bonusDamage: modifiedEnemyStats.bonusDamage || [],
     chargeBonus: getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy),
     cost: variationEnemy ? getTotalCostFromVariation(variationEnemy) : (unit2 ? getTotalCost(unit2) : 0),
-    costs: variationEnemy ? variationEnemy.costs : (unit2 ? unit2.costs : undefined)
+    costs: variationEnemy ? variationEnemy.costs : (unit2 ? unit2.costs : undefined),
+    population: 'costs' in (variationEnemy || unit2 || {}) ? (variationEnemy || unit2 as any)?.costs?.popcap : undefined, // eslint-disable-line @typescript-eslint/no-explicit-any
+    productionTime: 'costs' in (variationEnemy || unit2 || {}) ? (variationEnemy || unit2 as any)?.costs?.time : undefined // eslint-disable-line @typescript-eslint/no-explicit-any
   } : null;
 
   // Créer des listes de bonus alignées pour chaque unité
@@ -1021,8 +1028,8 @@ const Sandbox = () => {
                   <div className="flex-1 min-w-0 flex justify-end">
                     <UnitCard
                       className="w-[280px]"
-                      variation={modifiedVariationAlly}
-                      unit={modifiedUnit1}
+                      variation={modifiedVariationAlly!}
+                      unit={modifiedUnit1 || unit1}
                       side="left"
                       isSelected={true}
                       compareHp={enemyStats?.hp}
@@ -1038,6 +1045,8 @@ const Sandbox = () => {
                       chargeBonus={allyStats?.chargeBonus}
                       compareChargeBonus={enemyStats?.chargeBonus}
                       compareCost={enemyStats?.cost}
+                      comparePopulation={enemyStats?.population}
+                      compareProductionTime={enemyStats?.productionTime}
                     />
                   </div>
                 </div>
@@ -1055,8 +1064,8 @@ const Sandbox = () => {
                   <div className="flex-1 min-w-0 flex justify-start">
                     <UnitCard
                       className="w-[280px]"
-                      variation={modifiedVariationEnemy}
-                      unit={modifiedUnit2}
+                      variation={modifiedVariationEnemy!}
+                      unit={modifiedUnit2 || unit2}
                       side="right"
                       isSelected={true}
                       compareHp={allyStats?.hp}
@@ -1072,6 +1081,8 @@ const Sandbox = () => {
                       chargeBonus={enemyStats?.chargeBonus}
                       compareChargeBonus={allyStats?.chargeBonus}
                       compareCost={allyStats?.cost}
+                      comparePopulation={allyStats?.population}
+                      compareProductionTime={allyStats?.productionTime}
                     />
                   </div>
                   <div className="flex-shrink-0 space-y-3">
@@ -1125,32 +1136,55 @@ const Sandbox = () => {
               const chargeAlly = getChargeBonus(allyData, activeAbilitiesAlly, selectedAgeAlly);
               const chargeEnemy = getChargeBonus(enemyData, activeAbilitiesEnemy, selectedAgeEnemy);
               
-              if (atEqualCost) {
-                const result = computeVersusAtEqualCost(
-                  modifiedVariationAlly || modifiedUnit1!, 
-                  modifiedVariationEnemy || modifiedUnit2!,
-                  abilitiesArrayAlly,
-                  abilitiesArrayEnemy,
-                  chargeAlly,
-                  chargeEnemy
-                );
-                versusData = result;
-                multipliers = result.multipliers;
-              } else {
-                versusData = computeVersus(
-                  modifiedVariationAlly || modifiedUnit1!, 
-                  modifiedVariationEnemy || modifiedUnit2!,
-                  abilitiesArrayAlly,
-                  abilitiesArrayEnemy,
-                  chargeAlly,
-                  chargeEnemy
-                );
-              }
+                if (atEqualCost) {
+                  const result = computeVersusAtEqualCost(
+                    modifiedVariationAlly || modifiedUnit1!,
+                    modifiedVariationEnemy || modifiedUnit2!,
+                    abilitiesArrayAlly,
+                    abilitiesArrayEnemy,
+                    chargeAlly,
+                    chargeEnemy
+                  );
+                  versusData = result;
+                  multipliers = result.multipliers;
+                } else {
+                  versusData = computeVersus(
+                    modifiedVariationAlly || modifiedUnit1!,
+                    modifiedVariationEnemy || modifiedUnit2!,
+                    abilitiesArrayAlly,
+                    abilitiesArrayEnemy,
+                    chargeAlly,
+                    chargeEnemy
+                  );
+                }              // Logique de victoire/défaite basée sur la possession d'arme
+              // Une unité sans arme perd toujours contre une unité avec arme
+              // Un draw n'existe que si les deux unités n'ont pas d'armes
+              const allyHasWeapon = !!getPrimaryWeapon(modifiedVariationAlly || modifiedUnit1);
+              const enemyHasWeapon = !!getPrimaryWeapon(modifiedVariationEnemy || modifiedUnit2);
               
-              const isDraw = versusData.winner === 'draw';
-              // Comparer avec le nom pour distinguer les unités identiques (gauche = attacker, droite = defender)
-              const leftIsWinner = !isDraw && versusData.winner === versusData.attacker.id && versusData.attacker.timeToKill !== null && versusData.defender.timeToKill !== null && versusData.attacker.timeToKill < versusData.defender.timeToKill;
-              const rightIsWinner = !isDraw && versusData.winner === versusData.defender.id && versusData.attacker.timeToKill !== null && versusData.defender.timeToKill !== null && versusData.defender.timeToKill < versusData.attacker.timeToKill;
+              let isDraw = versusData.winner === 'draw';
+              let leftIsWinner = false;
+              let rightIsWinner = false;
+              
+              if (allyHasWeapon && !enemyHasWeapon) {
+                // Ally a une arme, Enemy n'en a pas -> Ally gagne
+                leftIsWinner = true;
+                isDraw = false;
+              } else if (!allyHasWeapon && enemyHasWeapon) {
+                // Ally n'a pas d'arme, Enemy en a une -> Enemy gagne
+                rightIsWinner = true;
+                isDraw = false;
+              } else if (allyHasWeapon && enemyHasWeapon) {
+                // Les deux ont une arme -> utiliser la logique normale de versus
+                isDraw = versusData.winner === 'draw';
+                leftIsWinner = !isDraw && versusData.winner === versusData.attacker.id && versusData.attacker.timeToKill !== null && versusData.defender.timeToKill !== null && versusData.attacker.timeToKill < versusData.defender.timeToKill;
+                rightIsWinner = !isDraw && versusData.winner === versusData.defender.id && versusData.attacker.timeToKill !== null && versusData.defender.timeToKill !== null && versusData.defender.timeToKill < versusData.attacker.timeToKill;
+              } else {
+                // Les deux n'ont pas d'arme -> Draw
+                isDraw = true;
+                leftIsWinner = false;
+                rightIsWinner = false;
+              }
               const leftMetrics = {
                 dps: versusData.attacker.dps,
                 dpsPerCost: versusData.attacker.dpsPerCost,
@@ -1186,7 +1220,7 @@ const Sandbox = () => {
                 isWinner: rightIsWinner,
                 isLoser: !rightIsWinner && !isDraw,
                 isDraw,
-                opponentClasses: (modifiedVariationAlly || modifiedUnit1)?.classes ?? unit1?.classes ?? [],
+                opponentClasses: (modifiedVariationEnemy || modifiedUnit2)?.classes ?? unit2?.classes ?? [],
                 opponentDps: versusData.attacker.dps,
                 opponentDpsPerCost: versusData.attacker.dpsPerCost,
                 opponentHitsToKill: versusData.attacker.hitsToKill,
@@ -1241,8 +1275,8 @@ const Sandbox = () => {
                       <div className="flex-1 min-w-0">
                         <UnitCard
                           className="w-[280px]"
-                          variation={modifiedVariationAlly}
-                          unit={modifiedUnit1}
+                          variation={modifiedVariationAlly!}
+                          unit={modifiedUnit1 || unit1}
                           side="left"
                           mode="versus"
                           versusMetrics={leftMetrics}
@@ -1260,8 +1294,8 @@ const Sandbox = () => {
                       <div className="flex-1 min-w-0">
                         <UnitCard
                           className="w-[280px]"
-                          variation={modifiedVariationEnemy}
-                          unit={modifiedUnit2}
+                          variation={modifiedVariationEnemy!}
+                          unit={modifiedUnit2 || unit2}
                           side="right"
                           mode="versus"
                           versusMetrics={rightMetrics}

@@ -123,6 +123,9 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
 
   const baseDamage = weapon.damage || 0;
   
+  // Nombre de projectiles (burst)
+  const burstCount = weapon.burst?.count || 1;
+  
   // Ajouter le bonus de charge SEULEMENT au premier attaque
   const chargeBonus_applied = isFirstAttack ? chargeBonus : 0;
 
@@ -184,16 +187,20 @@ function computeEffectiveDamage(attacker: CombatEntity, defender: CombatEntity, 
     }
   }
 
-  let raw = baseDamage + bonusDamage + chargeBonus_applied - armorValue;
+  // Calcul des dégâts par projectile: (baseDamage + bonus + chargeBonus - armor) * burst
+  // L'armure est appliquée à chaque projectile individuellement
+  let damagePerProjectile = baseDamage + bonusDamage + chargeBonus_applied - armorValue;
   
   // Appliquer les debuffs versus (ex: Camel Unease)
   const debuffMultiplier = getVersusDebuffMultiplier(attacker.classes, defender.activeAbilities || []);
   if (debuffMultiplier !== 1.0) {
-    raw = raw * debuffMultiplier;
+    damagePerProjectile = damagePerProjectile * debuffMultiplier;
   }
   
-  const clamped = raw < 1 ? 1 : raw; // Minimum 1
-  return { value: clamped, base: baseDamage, bonus: bonusDamage + chargeBonus_applied, armorApplied: armorValue, weapon, debuffMultiplier: debuffMultiplier !== 1.0 ? debuffMultiplier : undefined };
+  const clampedPerProjectile = damagePerProjectile < 1 ? 1 : damagePerProjectile;
+  const totalDamage = clampedPerProjectile * burstCount;
+  
+  return { value: totalDamage, base: baseDamage * burstCount, bonus: (bonusDamage + chargeBonus_applied) * burstCount, armorApplied: armorValue, weapon, debuffMultiplier: debuffMultiplier !== 1.0 ? debuffMultiplier : undefined };
 }
 
 function round(value: number, decimals: number): number {

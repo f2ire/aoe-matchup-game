@@ -31,6 +31,22 @@ export const technologyPatches: TechnologyPatch<Technology, TechnologyVariation>
     ]
   },
 
+  // adjustable-crossbars: augmente le burst de +1 pour Mangonel
+  {
+    id: 'adjustable-crossbars',
+    update: {
+      effects: [
+        {
+          property: 'burst',
+          select: { id: ['mangonel'] },
+          effect: 'change',
+          value: 1,
+          type: 'passive'
+        }
+      ]
+    }
+  },
+
   // ability-quick-strike: reduce attackSpeed by 0.5 but augment attackSpeed multiply 0.5 for ghulam (preserve unknown effect)
   {
     id: 'ability-quick-strike',

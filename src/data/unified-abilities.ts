@@ -171,6 +171,9 @@ export function getAbilitiesForUnit(
   unitId?: string
 ): Ability[] {
   const abilities = combatAbilities.filter(ability => {
+    // Filtrer les abilities marquées comme hidden
+    if ((ability as any).hidden) return false; // eslint-disable-line @typescript-eslint/no-explicit-any
+    
     if (ability.civs.length > 0 && !ability.civs.includes(civAbbr) && civAbbr !== 'all') {
       return false;
     }
