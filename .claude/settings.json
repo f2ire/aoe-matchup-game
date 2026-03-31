@@ -1,0 +1,16 @@
+{
+  "hooks": {
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c \"import sys,json,re; d=json.load(sys.stdin); f=d.get('tool_input',{}).get('file_path',''); matched=bool(re.search(r'(combat\\.ts|abilities\\.ts|technologies\\.ts|units\\.ts|Sandbox\\.tsx|UnitCard\\.tsx|useUnitSlot\\.ts)$', f)); print(json.dumps({'hookSpecificOutput':{'hookEventName':'PostToolUse','additionalContext':'[CLAUDE.md REMINDER] You just edited a key file. Check if CLAUDE.md needs updating (interfaces, function signatures, new state, new mechanics). Update the relevant section before finishing.'}})) if matched else None\"",
+            "statusMessage": "Checking CLAUDE.md..."
+          }
+        ]
+      }
+    ]
+  }
+}
