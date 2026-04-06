@@ -5,9 +5,7 @@
      Keep sections tight — no prose, just facts. -->
 
 ## PROJECT SUMMARY
-Age of Empires IV educational tool. Two modes:
-- **Quiz**: Random 1v1 matchups, user picks the winner
-- **Sandbox**: Interactive unit comparison with combat simulation, tech/ability toggles, kiting, equal-cost modes
+Age of Empires IV educational tool focused on the **Sandbox** mode: interactive unit comparison with combat simulation, tech/ability toggles, kiting, equal-cost modes. Sandbox is the default (root `/`) page.
 
 Stack: React 18 + TypeScript + Vite + TailwindCSS + shadcn/ui + Framer Motion
 Dev: `npm run dev` → port 8080
@@ -22,10 +20,7 @@ Types are loose (`noImplicitAny: false`, `strictNullChecks: false`)
 src/
 ├── App.tsx                        # Router + providers
 ├── pages/
-│   ├── Index.tsx                  # Home (mode selection)
-│   ├── Quiz.tsx                   # Quiz mode
-│   ├── Sandbox.tsx                # ~49KB - main comparison tool (most complex page)
-│   ├── Results.tsx                # Quiz results
+│   ├── Sandbox.tsx                # ~49KB - main page (default route `/`)
 │   └── NotFound.tsx
 ├── components/
 │   ├── UnitCard.tsx               # ~45KB - unit stat display + vs comparisons
@@ -33,7 +28,6 @@ src/
 │   ├── TechnologySelector.tsx     # Active tech picker UI
 │   ├── AgeSelector.tsx            # Age dropdown (II–IV)
 │   ├── VersusPanel.tsx            # Combat result display
-│   ├── NavLink.tsx
 │   └── ui/                        # ~50 shadcn/radix components (don't modify)
 ├── lib/
 │   ├── combat.ts                  # ~31KB - all combat simulation logic
@@ -133,6 +127,8 @@ Charge speed boost: melee unit with `charge-attack` active gets ×1.2 move speed
 ### Output metrics
 `DPS, DPS_per_cost, hits_to_kill, time_to_kill, winner, formulaString`
 
+`VersusResult.winner` is `"draw" | "attacker" | "defender"` — **never a unit ID**. Sandbox.tsx compares against `'attacker'`/`'defender'` strings, not `versusData.attacker.id`, so mirrored units (same ID on both sides) produce correct left/right winner display.
+
 ---
 
 ## ABILITIES (data/patches/abilities.ts)
@@ -146,8 +142,40 @@ All synthetic abilities not present in raw aoe4world data. The 5 key ones:
 | `ability-quick-strike` | Ghulam | Two rapid attacks: effective cycle = (base + 0.5) × 0.5. Applied as `attackSpeed` effects |
 | `ability-golden-age-tier-4` | Ayyubid (siege) | Siege units cost ×0.8 (−20%). Maps `property: "unknown"` → `costReduction` via patch |
 | `ability-golden-age-tier-5` | Ayyubid (camel) | Camel-lancer & desert-raider attack cycle ×(1/1.2) (20% faster). Maps `property: "unknown"` → `attackSpeed` via patch |
+| `ability-atabeg-supervision` | Ayyubid `land_military` | Atabeg grants +20% HP to supervised units. Patched to `hitpoints ×1.2` targeting `land_military` class (raw data had `unknown` targeting only atabeg itself). |
+| `ability-tactical-charge` | Camel Lancer (Ayyubid) | Always active (patched `active:'always'` at top level). Currently no-op stats (`unknown` property); charge damage applied via `charge-attack` + knight class. |
 
 Charge weapon detection: secondary melee weapon with strictly higher damage than primary → used as `chargeWeapon` on hit 1.
+
+### Weapon-swap unit system (useUnitSlot.ts)
+Generalised for desert-raider and manjaniq via `WEAPON_SWAP_GROUPS` and `WEAPON_SWAP_DEFAULTS`:
+- `toggleAbility` finds the group containing the toggled ability and enforces mutual exclusivity (clicking active = no-op, clicking inactive = switch).
+- Auto-activate effect detects `unit.id in WEAPON_SWAP_DEFAULTS` → sets default weapon + all `active:'always'` abilities on first load.
+- `effectiveVariation` handles each unit's weapon reorder logic with a per-unit `if` block.
+
+### Desert Raider dual-weapon system
+Raw weapons: `[0]` Sword (melee, +bonus vs cavalry), `[1]` Torch, `[2]` Bow (ranged, no bonus).
+- `ability-desert-raider-blade` / `ability-desert-raider-bow` are **mutually exclusive** — toggling the active one is a no-op; toggling the inactive one switches modes.
+- Default on unit select: **bow mode** (`ability-desert-raider-bow` auto-activated). From cavalry list: **blade mode** (virtual id `'desert-raider_cavalry'` triggers `setUnit(..., 'ability-desert-raider-blade')`).
+- `effectiveVariation` memo reorders weapons: active main weapon → index 0, inactive main weapon removed, Torch kept.
+- `effectiveClasses` memo: blade mode → strips ranged classes (`ranged`, `archer`, `cavalry_archer`, `ranged_hybrid`) + adds `'melee'` → melee techs appear; ranged attack techs hidden. Bow mode → original classes unchanged.
+- `techs` memo additionally filters out techs whose **only** relevant effect is `rangedAttack` (e.g. Steeled Arrow, Incendiary Arrows target `desert-raider` by ID, bypassing the class strip — these are caught by a post-filter that removes purely ranged-attack techs in blade mode).
+- `ability-camel-unease` is `active: 'always'` → auto-activated alongside the weapon default on unit load.
+- Both weapon abilities have `property:'unknown'` (no-op in `applyTechnologyEffects`); weapon switching is driven purely by `effectiveVariation`.
+- The cavalry bonus on the Sword comes from the raw weapon modifiers, not from a patch.
+- `charge-attack` is explicitly excluded from desert-raider `abilities` (neither mode grants charge).
+
+### Manjaniq dual-weapon system
+Raw weapons: `[0]` Mangonel (siege, dmg 10, burst 3, +30 vs building/naval_unit, +10 vs ranged), `[1]` Incendiary (fire, dmg 2, burst 12, +16 vs building/naval_unit — no ranged bonus), `[2]` Adjustable Crossbars (siege, alternate upgrade weapon).
+- `ability-swap-weapon-kinetic` / `ability-swap-weapon-incendiary` — mutually exclusive, default kinetic on load.
+- `effectiveVariation`: incendiary mode retyped `fire → 'siege'` so `modifiedStats` treats it as `siegeAttack` (ignores ranged armor, stats display correctly).
+- Unit patch (`units.ts`): `transformMultiClassTargets` fixes `[["naval","unit"]]` → `"naval_unit"` on all modifiers (same approach as culverin).
+
+### Camel Lancer charge mechanics
+- Has `knight` class → `charge-attack` auto-activates and applies knight-tier bonus damage (+10/12/14 age 2/3/4).
+- `ability-tactical-charge` patched with `active: 'always'` at top level → also auto-activates on select.
+- **TODO** in `Sandbox.tsx:getChargeBonus`: camel-lancer charge damage uses knight values as placeholder — to verify/adjust against in-game stats.
+- `setUnit(unit, preferredAbility?)` — optional second arg stores a `pendingAbilityRef` consumed by the auto-activate effect.
 
 ---
 
@@ -157,7 +185,14 @@ Deep-partial merges on top of raw JSON data.
 ```ts
 { id: string, reason: string, update: DeepPartial<T>, uiTooltip?: string }
 ```
+`after` function available on both unit and variation level — used for injecting missing age variations (e.g. bedouin-swordsman, bedouin-skirmisher).
+
 **abilities.ts** = most frequently modified file. Add new unit special-cases here, not in combat.ts.
+
+### Modifier target class encoding
+Raw JSON encodes composite class targets as nested arrays: `[['infantry', 'light']]`.
+`combat.ts` checks defender classes via `expandedTokens.has(req)` — composite classes like `infantry_light` exist as one token; `light` alone does NOT.
+**Rule:** always use the underscore form in patches: `target: { class: ['infantry_light'] }`, not `[['infantry', 'light']]`.
 
 ---
 
@@ -198,6 +233,7 @@ Read only relevant sections — never load whole file:
 - Tailwind for all styling; no CSS modules
 - shadcn/ui in `src/components/ui/` — prefer extending over rewriting
 - Special-case unit behaviors → `data/patches/` not `combat.ts`
+- `categorizeUnit`: `worker` class → `'other'` (before cavalry check) so trade/support units like atabeg don't appear in cavalry
 - Unit data is immutable; apply techs/abilities at display/computation time via hooks
 - `cn()` from `src/lib/utils.ts` for conditional classNames
 - Charge bonus per-age overrides are handled in `Sandbox.tsx`, not in ability data
