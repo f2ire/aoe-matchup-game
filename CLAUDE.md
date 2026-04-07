@@ -144,6 +144,7 @@ All synthetic abilities not present in raw aoe4world data. The 5 key ones:
 | `ability-golden-age-tier-5` | Ayyubid (camel) | Camel-lancer & desert-raider attack cycle ×(1/1.2) (20% faster). Maps `property: "unknown"` → `attackSpeed` via patch |
 | `ability-atabeg-supervision` | Ayyubid `land_military` | Atabeg grants +20% HP to supervised units. Patched to `hitpoints ×1.2` targeting `land_military` class (raw data had `unknown` targeting only atabeg itself). |
 | `ability-tactical-charge` | Camel Lancer (Ayyubid) | Always active (patched `active:'always'` at top level). Currently no-op stats (`unknown` property); charge damage applied via `charge-attack` + knight class. |
+| `ability-shield-wall` | Limitanei (Byzantine) | Patched variation effects: `moveSpeed ×0.75` (−25%), `attackSpeed ×0.75` (25% faster attacks), `rangedResistance +30` (30% ranged damage reduction). Raw data had all three wrong (additive speed values, rangedArmor instead of resistance). |
 
 Charge weapon detection: secondary melee weapon with strictly higher damage than primary → used as `chargeWeapon` on hit 1.
 
@@ -171,6 +172,17 @@ Raw weapons: `[0]` Mangonel (siege, dmg 10, burst 3, +30 vs building/naval_unit,
 - `effectiveVariation`: incendiary mode retyped `fire → 'siege'` so `modifiedStats` treats it as `siegeAttack` (ignores ranged armor, stats display correctly).
 - Unit patch (`units.ts`): `transformMultiClassTargets` fixes `[["naval","unit"]]` → `"naval_unit"` on all modifiers (same approach as culverin).
 
+### Tech × Ability interactions (patches/abilities.ts + useUnitSlot.ts)
+`techAbilityInteractions: TechAbilityInteraction[]` — declarative list of conditional stat boosts that require **both** a tech and an ability to be active simultaneously. Evaluated in `useUnitSlot.ts` after the two `applyTechnologyEffects` calls.
+```ts
+{ requiredTech, requiredAbility, unitId?, apply: (stats) => UnitStats }
+```
+To add a new interaction: append an entry to `techAbilityInteractions` in `patches/abilities.ts`. No changes needed in `useUnitSlot.ts`.
+
+### rangedResistance in UnitStats / applyTechnologyEffects
+`UnitStats.rangedResistance?: number` (percentage 0–100) is initialized from the unit's existing ranged resistance via `getResistanceValue(data, 'ranged')` in `useUnitSlot.ts`. Abilities/techs may add to it via `effect: 'change', value: 30` (+30 pp) or `effect: 'multiply'`.
+`applyTechnologyEffects` handles it as a special property (Phase 3, like attackSpeed). All 4 modified entity objects in `Sandbox.tsx` (`modifiedVariationAlly/Enemy`, `modifiedUnit1/2`) override their `resistance` array with the computed value, so `combat.ts`'s `getResistanceValue` picks it up correctly.
+
 ### Camel Lancer charge mechanics
 - Has `knight` class → `charge-attack` auto-activates and applies knight-tier bonus damage (+10/12/14 age 2/3/4).
 - `ability-tactical-charge` patched with `active: 'always'` at top level → also auto-activates on select.
@@ -190,9 +202,9 @@ Deep-partial merges on top of raw JSON data.
 **abilities.ts** = most frequently modified file. Add new unit special-cases here, not in combat.ts.
 
 ### Modifier target class encoding
-Raw JSON encodes composite class targets as nested arrays: `[['infantry', 'light']]`.
-`combat.ts` checks defender classes via `expandedTokens.has(req)` — composite classes like `infantry_light` exist as one token; `light` alone does NOT.
-**Rule:** always use the underscore form in patches: `target: { class: ['infantry_light'] }`, not `[['infantry', 'light']]`.
+Raw JSON encodes composite class targets as nested arrays: `[['light', 'melee', 'infantry']]`.
+`combat.ts` builds `expandedTokens` from the defender's classes **and** all individual parts of compound classes (split on `_`). So `light_melee_infantry` adds `light`, `melee`, `infantry` as separate tokens. This means raw multi-token groups like `["light","melee","infantry"]` correctly match units that have the compound class `light_melee_infantry`.
+**Rule for patches:** still prefer the underscore form: `target: { class: ['infantry_light'] }` — it's unambiguous and avoids multi-token groups.
 
 ---
 
@@ -233,7 +245,10 @@ Read only relevant sections — never load whole file:
 - Tailwind for all styling; no CSS modules
 - shadcn/ui in `src/components/ui/` — prefer extending over rewriting
 - Special-case unit behaviors → `data/patches/` not `combat.ts`
-- `categorizeUnit`: `worker` class → `'other'` (before cavalry check) so trade/support units like atabeg don't appear in cavalry
+- `categorizeUnit(unit, selectedCiv?)`: `worker` class → `'other'`; `mercenary_byz` → `'mercenary'` **only if `selectedCiv === 'by'`** — prevents units like ghulam (which have `mercenary_byz` but are also Abbasid) from disappearing into the mercenary category for other civs
+- `setUnit` always clears `activeTechnologies` and `activeAbilities` on every unit switch (including non-null) — prevents stale techs from a previous unit/civ leaking onto the new selection
+- `modifiedStats` clamps `moveSpeed` to a maximum of 2.0 (game cap) after all tech/ability effects are applied
+- **Mercenary category**: `DEFAULT_OPEN_CATEGORIES.mercenary = false` (collapsed by default). In Sandbox.tsx, `getMercenarySubCategory` sub-groups them as Melee Infantry / Ranged Infantry / Melee Cavalry / Ranged Cavalry / Siege using `MERCENARY_SUB_ORDER`. Rendered with italic sub-labels inside the single collapsible SelectGroup. No `(mercenary)` badge — category is self-explanatory.
 - Unit data is immutable; apply techs/abilities at display/computation time via hooks
 - `cn()` from `src/lib/utils.ts` for conditional classNames
 - Charge bonus per-age overrides are handled in `Sandbox.tsx`, not in ability data
