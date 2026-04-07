@@ -196,7 +196,12 @@ To add a new interaction: append an entry to `techAbilityInteractions` in `patch
 
 Deep-partial merges on top of raw JSON data.
 ```ts
-{ id: string, reason: string, update: DeepPartial<T>, uiTooltip?: string }
+{ id: string, reason: string, update: DeepPartial<T>, uiTooltip?: string, foreignEngineering?: boolean }
+
+`foreignEngineering: true` on a tech patch → added to `foreignEngineeringTechIds` (exported Set from `patches/technologies.ts`) → `TechnologySelector` renders it with orange border/bg **only when `selectedCiv === 'by'`** (prop passed from Sandbox.tsx). Other civs that have the tech natively see no special styling.
+`foreignEngineeringUnits: ['unit-id', ...]` on a patch → added to `foreignEngineeringUnitRestrictions` (exported `Map<string, string[]>`) → `useUnitSlot.ts` `techs` memo filters out the tech for Byzantine unless `unit.id` is in the list. Techs without `foreignEngineeringUnits` have no unit restriction.
+`excludedUnits: ['unit-id', ...]` on a patch → added to `techUnitExclusions` (exported `Map<string, string[]>`) → `useUnitSlot.ts` `techs` memo filters out the tech globally for those unit IDs regardless of civ.
+Same `foreignEngineering`/`foreignEngineeringUnits`/`uiTooltip` flags work on ability patches (`abilityPatches` in `patches/abilities.ts`). Exports: `foreignEngineeringAbilityIds` (Set) and `foreignEngineeringAbilityUnitRestrictions` (Map). `AbilitySelector` applies orange styling + `*` tooltip badge when `selectedCiv === 'by'`. `useUnitSlot.ts` `abilities` memo filters by unit restriction for Byz.
 ```
 `after` function available on both unit and variation level — used for injecting missing age variations (e.g. bedouin-swordsman, bedouin-skirmisher).
 
@@ -249,6 +254,7 @@ Read only relevant sections — never load whole file:
 - `categorizeUnit(unit, selectedCiv?)`: `worker` class → `'other'`; `mercenary_byz` → `'mercenary'` **only if `selectedCiv === 'by'`** — prevents units like ghulam (which have `mercenary_byz` but are also Abbasid) from disappearing into the mercenary category for other civs
 - `setUnit` always clears `activeTechnologies` and `activeAbilities` on every unit switch (including non-null) — prevents stale techs from a previous unit/civ leaking onto the new selection
 - `modifiedStats` clamps `moveSpeed` to a maximum of 2.0 (game cap) after all tech/ability effects are applied
+- HRE infantry passive: `modifiedStats` applies `moveSpeed ×1.1` for `selectedCiv === 'hr'` + infantry class — formerly a technology, now a baked-in passive absent from raw data. Applied before the 2.0 cap. Exception: `landsknecht` also gets the bonus when `selectedCiv === 'by'` (mercenary use).
 - **Mercenary category**: `DEFAULT_OPEN_CATEGORIES.mercenary = false` (collapsed by default). In Sandbox.tsx, `getMercenarySubCategory` sub-groups them as Melee Infantry / Ranged Infantry / Melee Cavalry / Ranged Cavalry / Siege using `MERCENARY_SUB_ORDER`. Rendered with italic sub-labels inside the single collapsible SelectGroup. No `(mercenary)` badge — category is self-explanatory.
 - Unit data is immutable; apply techs/abilities at display/computation time via hooks
 - `cn()` from `src/lib/utils.ts` for conditional classNames
