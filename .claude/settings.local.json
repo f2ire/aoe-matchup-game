@@ -13,7 +13,8 @@
       "Bash(python -c ':*)",
       "Bash(node -e ':*)",
       "Bash(node -e \"const fs = require\\('fs'\\); const data = JSON.parse\\(fs.readFileSync\\('d:\\\\Yanis\\\\Desktop\\\\projet_code\\\\aoe4-matchup-master1\\\\src\\\\data\\\\all-unified.json'\\)\\); data.units.filter\\(u => u.classes && u.classes.includes\\('mercenary_byz'\\)\\).forEach\\(u => console.log\\(\\\\`id: \\\\\\\\\\\\`\\\\${u.id}\\\\\\\\\\\\`, classes: [\\\\${u.classes.map\\(c => \\\\`\\\\\\\\\\\\\"\\\\${c}\\\\\\\\\\\\\"\\\\`\\).join\\(', '\\)}]\\\\`\\)\\);\")",
-      "Bash(node)"
+      "Bash(node)",
+      "Bash(node -e \"const data = require\\('./src/data/all-unified.json'\\); const dr = data.data.find\\(u => u.id === 'desert-raider'\\); console.log\\('civs:', JSON.stringify\\(dr.civs\\)\\); console.log\\('classes:', JSON.stringify\\(dr.classes\\)\\);\")"
     ]
   }
 }

@@ -158,13 +158,14 @@ Generalised for desert-raider and manjaniq via `WEAPON_SWAP_GROUPS` and `WEAPON_
 Raw weapons: `[0]` Sword (melee, +bonus vs cavalry), `[1]` Torch, `[2]` Bow (ranged, no bonus).
 - `ability-desert-raider-blade` / `ability-desert-raider-bow` are **mutually exclusive** — toggling the active one is a no-op; toggling the inactive one switches modes.
 - Default on unit select: **bow mode** (`ability-desert-raider-bow` auto-activated). From cavalry list: **blade mode** (virtual id `'desert-raider_cavalry'` triggers `setUnit(..., 'ability-desert-raider-blade')`).
+- The cavalry duplicate is only added when `categorizeUnit(desertRaider, selectedCiv) !== 'mercenary'` — so for Byzantine (`selectedCiv === 'by'`), desert-raider stays exclusively in the mercenary category and does not appear in cavalry too.
 - `effectiveVariation` memo reorders weapons: active main weapon → index 0, inactive main weapon removed, Torch kept.
 - `effectiveClasses` memo: blade mode → strips ranged classes (`ranged`, `archer`, `cavalry_archer`, `ranged_hybrid`) + adds `'melee'` → melee techs appear; ranged attack techs hidden. Bow mode → original classes unchanged.
 - `techs` memo additionally filters out techs whose **only** relevant effect is `rangedAttack` (e.g. Steeled Arrow, Incendiary Arrows target `desert-raider` by ID, bypassing the class strip — these are caught by a post-filter that removes purely ranged-attack techs in blade mode).
 - `ability-camel-unease` is `active: 'always'` → auto-activated alongside the weapon default on unit load.
 - Both weapon abilities have `property:'unknown'` (no-op in `applyTechnologyEffects`); weapon switching is driven purely by `effectiveVariation`.
 - The cavalry bonus on the Sword comes from the raw weapon modifiers, not from a patch.
-- `charge-attack` is explicitly excluded from desert-raider `abilities` (neither mode grants charge).
+- `charge-attack` is explicitly excluded from desert-raider and cataphract `abilities` (neither unit can charge despite having `melee`/`knight` class).
 
 ### Manjaniq dual-weapon system
 Raw weapons: `[0]` Mangonel (siege, dmg 10, burst 3, +30 vs building/naval_unit, +10 vs ranged), `[1]` Incendiary (fire, dmg 2, burst 12, +16 vs building/naval_unit — no ranged bonus), `[2]` Adjustable Crossbars (siege, alternate upgrade weapon).
