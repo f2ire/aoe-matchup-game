@@ -80,7 +80,8 @@ Derived from UnifiedVariation at compute time:
 CombatEntity
   hitpoints, costs, classes[], weapons[], activeAbilities[]
   armor: { melee, ranged }
-  moveSpeed   ← movement.speed (tiles/s); NEW — used for kiting
+  moveSpeed          ← movement.speed (tiles/s); used for kiting
+  continuousMovement ← bool (default false); if true + ranged speed > melee speed → melee TTK = null in kiting
 ```
 
 ### Key exported utilities (unified-units.ts)
@@ -120,9 +121,20 @@ CombatEntity
 
 Charge speed boost: melee unit with `charge-attack` active gets ×1.2 move speed until first hit (affects kiting calculation).
 
+`continuousMovement` flag: if `ranged.continuousMovement === true` and `speedRanged > speedMelee`, melee TTK = null immediately (before the normal delta check). Must be set on each **variation** (not unit top-level) — `toCombatEntity` receives a `UnifiedVariation`, not the `AoE4Unit`. Use `after` at the unit level to spread it onto all variations: `u.variations = u.variations.map(v => ({ ...v, continuousMovement: true }))`. Example: Mangudai.
+
 ### Internal helpers
 - `getChargeWeapon(entity)` — finds secondary melee weapon with higher damage than primary (knight/ghulam only)
 - `isRangedUnit(entity)`, `getMaxRange(entity)`, `getRetreatTime(entity)` — kiting helpers
+
+### Healing mechanic
+`CombatEntity.healingRate` (HP/hit) — defender heals this amount for each hit it lands. In `computeMetrics`, after base TTK is computed:
+- `healPerS = healingRate / defenderAttackSpeed`
+- `netDPS = attackerDPS − healPerS`
+- if `netDPS ≤ 0` → defender is immortal (`hitsToKill = null`, `timeToKill = null`)
+- otherwise → `timeToKill = defenderHP / netDPS`
+
+Pipeline: `UnitStats.healingRate` (initialized to 0) → `applyTechnologyEffects` Phase 3 (`property: 'healingRate'`) → `modifiedStats` → injected into modified variation in Sandbox.tsx → `toCombatEntity` → `computeMetrics`.
 
 ### Output metrics
 `DPS, DPS_per_cost, hits_to_kill, time_to_kill, winner, formulaString`
@@ -145,8 +157,22 @@ All synthetic abilities not present in raw aoe4world data. The 5 key ones:
 | `ability-atabeg-supervision` | Ayyubid `land_military` | Atabeg grants +20% HP to supervised units. Patched to `hitpoints ×1.2` targeting `land_military` class (raw data had `unknown` targeting only atabeg itself). |
 | `ability-tactical-charge` | Camel Lancer (Ayyubid) | Always active (patched `active:'always'` at top level). Currently no-op stats (`unknown` property); charge damage applied via `charge-attack` + knight class. |
 | `ability-shield-wall` | Limitanei (Byzantine) | Patched variation effects: `moveSpeed ×0.75` (−25%), `attackSpeed ×0.75` (25% faster attacks), `rangedResistance +30` (30% ranged damage reduction). Raw data had all three wrong (additive speed values, rangedArmor instead of resistance). |
+| `ability-trample` | Cataphract (Byzantine) | +12 first-hit bonus handled by `getChargeBonus` in Sandbox.tsx. Raw `meleeAttack +12` zeroed, `moveSpeed ×1.25` on variation effects (not `update.effects` — see PATCH SYSTEM note). |
+| `ability-fortitude` | Sipahi (Ottoman/Byzantine) | Raw variation had `change +0.67` (adds to cycle = slower). Corrected to `multiply ×0.67` on variations (= −33% cycle = +50% attacks/s). Duration 10s noted in uiTooltip but not modelled. |
 
 Charge weapon detection: secondary melee weapon with strictly higher damage than primary → used as `chargeWeapon` on hit 1.
+
+### Civ-specific mutually exclusive technologies (useUnitSlot.ts)
+`CIV_TECH_EXCLUSIVE_GROUPS: Record<string, string[][]>` — maps a civ abbreviation to groups of tech IDs that are mutually exclusive for that civ. Activating any tech in a group automatically deactivates the others in the same group.
+- Uses `selectedCivRef` (a ref updated at render time) so `toggleTechnology`'s `useCallback` dependency array stays empty.
+- Current entry: `'by': [['biology', 'royal-bloodlines']]` — Byzantine players can have biology (+25% HP) OR royal-bloodlines (+35% HP), never both.
+- To add a new group: append to the relevant civ's array (or add a new civ key).
+
+`DEFAULT_ACTIVE_TECHS: Record<string, string[]>` — maps a civ abbreviation to tech IDs that are auto-activated on unit load for that civ (if the tech is present in the unit's tech list).
+- Runs in a `useEffect` on `[unit, selectedCiv, techs]`. User can manually uncheck after load.
+- `lockedTechnologies: Set<string>` — derived memo returned from `useUnitSlot`; contains all IDs from `DEFAULT_ACTIVE_TECHS[selectedCiv]`. Passed to `TechnologySelector` → renders locked techs at 30% opacity with `cursor-not-allowed`; clicking is a no-op.
+- Current entry: `'by': ['howdahs']`.
+- To add: append to the relevant civ's array (or add a new civ key).
 
 ### Weapon-swap unit system (useUnitSlot.ts)
 Generalised for desert-raider and manjaniq via `WEAPON_SWAP_GROUPS` and `WEAPON_SWAP_DEFAULTS`:
@@ -154,11 +180,30 @@ Generalised for desert-raider and manjaniq via `WEAPON_SWAP_GROUPS` and `WEAPON_
 - Auto-activate effect detects `unit.id in WEAPON_SWAP_DEFAULTS` → sets default weapon + all `active:'always'` abilities on first load.
 - `effectiveVariation` handles each unit's weapon reorder logic with a per-unit `if` block.
 
+### Ability dependency system (useUnitSlot.ts)
+`ABILITY_DEPENDENCIES: Record<string, string>` — maps a dependent ability ID to its required ability ID. A dependent ability can only be active when its required ability is also active.
+- `toggleAbility`: toggling OFF a required ability → also removes all dependents. Toggling ON a dependent when requirement is not met → silent no-op.
+- Auto-activate effect: abilities listed in `ABILITY_DEPENDENCIES` are skipped during auto-activation on unit load (they activate when their requirement activates).
+- When a required ability is toggled ON: all `active:'always'` dependents present in the current `abilities` list are automatically added.
+- `lockedAbilities: Set<string>` — derived memo returned from `useUnitSlot`; contains IDs of abilities whose requirement is not currently active.
+- `AbilitySelector` accepts `lockedAbilities` prop → renders locked abilities at 30% opacity with `cursor-not-allowed`; clicking is a no-op.
+- Current entry: `'ability-royal-knight-charge-damage'` requires `'charge-attack'`.
+- To add a new dependency: append `{ 'ability-id': 'required-ability-id' }` to `ABILITY_DEPENDENCIES` in `useUnitSlot.ts`. No other changes needed.
+
+### Tech-gated abilities (ABILITY_TECH_DEPENDENCIES)
+`ABILITY_TECH_DEPENDENCIES: Record<string, string>` — maps an ability ID to a required technology ID. The ability is visible but locked unless that tech is also active.
+- `toggleAbility`: activation is a silent no-op if the required tech is not active (uses `activeTechnologiesRef` to avoid closure dep).
+- `toggleTechnology`: deselecting a tech automatically removes all abilities that depend on it via `setActiveAbilities` inside the tech setter.
+- `lockedAbilities` memo: includes abilities in `ABILITY_TECH_DEPENDENCIES` whose required tech is absent. `AbilitySelector` already renders locked abilities at 30% opacity with `cursor-not-allowed`.
+- `getAbilitiesForUnit` (`unified-abilities.ts`): `unlockedBy` suppression skipped when `variation.active === 'manual'` — manual abilities stay visible even when their unlocking tech appears in the tech list.
+- Current entry: `'ability-gallop'` requires `'mounted-training'`.
+- To add a new entry: append `{ 'ability-id': 'required-tech-id' }` to `ABILITY_TECH_DEPENDENCIES` in `useUnitSlot.ts`. No other changes needed.
+
 ### Desert Raider dual-weapon system
 Raw weapons: `[0]` Sword (melee, +bonus vs cavalry), `[1]` Torch, `[2]` Bow (ranged, no bonus).
 - `ability-desert-raider-blade` / `ability-desert-raider-bow` are **mutually exclusive** — toggling the active one is a no-op; toggling the inactive one switches modes.
 - Default on unit select: **bow mode** (`ability-desert-raider-bow` auto-activated). From cavalry list: **blade mode** (virtual id `'desert-raider_cavalry'` triggers `setUnit(..., 'ability-desert-raider-blade')`).
-- The cavalry duplicate is only added when `categorizeUnit(desertRaider, selectedCiv) !== 'mercenary'` — so for Byzantine (`selectedCiv === 'by'`), desert-raider stays exclusively in the mercenary category and does not appear in cavalry too.
+- The `desert-raider_cavalry` virtual duplicate is added in `categorizedUnits`: for non-mercenary civs → added to `cavalry`; for Byzantine (where desert-raider is `mercenary`) → added to `mercenary` category with blade-mode classes (ranged classes stripped, `'melee'` added) so `getMercenarySubCategory` places it in **Melee Cavalry**. Both trigger blade mode via `setUnit(..., 'ability-desert-raider-blade')`.
 - `effectiveVariation` memo reorders weapons: active main weapon → index 0, inactive main weapon removed, Torch kept.
 - `effectiveClasses` memo: blade mode → strips ranged classes (`ranged`, `archer`, `cavalry_archer`, `ranged_hybrid`) + adds `'melee'` → melee techs appear; ranged attack techs hidden. Bow mode → original classes unchanged.
 - `techs` memo additionally filters out techs whose **only** relevant effect is `rangedAttack` (e.g. Steeled Arrow, Incendiary Arrows target `desert-raider` by ID, bypassing the class strip — these are caught by a post-filter that removes purely ranged-attack techs in blade mode).
@@ -180,9 +225,12 @@ Raw weapons: `[0]` Mangonel (siege, dmg 10, burst 3, +30 vs building/naval_unit,
 ```
 To add a new interaction: append an entry to `techAbilityInteractions` in `patches/abilities.ts`. No changes needed in `useUnitSlot.ts`.
 
-### rangedResistance in UnitStats / applyTechnologyEffects
+### rangedResistance / meleeVulnerability in UnitStats / applyTechnologyEffects
 `UnitStats.rangedResistance?: number` (percentage 0–100) is initialized from the unit's existing ranged resistance via `getResistanceValue(data, 'ranged')` in `useUnitSlot.ts`. Abilities/techs may add to it via `effect: 'change', value: 30` (+30 pp) or `effect: 'multiply'`.
 `applyTechnologyEffects` handles it as a special property (Phase 3, like attackSpeed). All 4 modified entity objects in `Sandbox.tsx` (`modifiedVariationAlly/Enemy`, `modifiedUnit1/2`) override their `resistance` array with the computed value, so `combat.ts`'s `getResistanceValue` picks it up correctly.
+
+`UnitStats.meleeVulnerability?: number` (percentage 0–100) — same pipeline as `rangedResistance` but for incoming melee damage amplification. Initialized to 0 in `baseStats`. Injected into resistance array as `{ type: 'melee_vulnerability', value }`. In `combat.ts`, read via `getResistanceValue(defender, 'melee_vulnerability')` when `weapon.type === 'melee'` → multiplies damage by `(1 + pct/100)`. Current use: `ability-fortitude` (Sipahi) applies `+50` while active.
+Display in `UnitCard.tsx`: Melee Armor value turns orange with dotted underline + tooltip when `meleeVulnerability > 0`. A dedicated "Melee Vuln. +X%" line appears below Melee Armor in both the compact stat block and the detailed panel.
 
 ### Camel Lancer charge mechanics
 - Has `knight` class → `charge-attack` auto-activates and applies knight-tier bonus damage (+10/12/14 age 2/3/4).
@@ -205,11 +253,26 @@ Same `foreignEngineering`/`foreignEngineeringUnits`/`uiTooltip` flags work on ab
 ```
 `after` function available on both unit and variation level — used for injecting missing age variations (e.g. bedouin-swordsman, bedouin-skirmisher).
 
+**`update.effects` vs variation effects — critical distinction:** `update.effects` (via `deepMerge`) sets effects on the **top-level** ability object only. `getActiveAbilityVariations` returns **variation** objects, whose `effects` come from the raw JSON — they are NOT inherited from the top-level patch. To fix or override variation effects, always use the `after` function to rewrite `v.effects` on each variation. Using `update.effects` alone to correct an effect value will have no impact on the computed stats.
+
+**Ability-level vs variation-level effects — double-application pitfall:** `getAbilityVariation` (`unified-abilities.ts`) **concatenates** variation effects + ability-level effects: `mergedEffects = [...variationEffects, ...ability.effects]`. If the same effect list is set at both levels (e.g. synthetic abilities created with identical `effects` on the ability and its variation), it applies twice. Rule: put effects at **one level only**. For `charge-attack`, effects live at the ability level; the variation has `effects: []`.
+
+**Zeroing a raw effect without hiding the tech:** `isCombatTechnology` (called at module load) filters out techs with no combat effects → they disappear from the selector. To nullify a raw effect while keeping the tech visible, use `update: { effects: [{ ...same shape, value: 0 }] }` — the effect still matches the unit (so the tech appears) but has zero stat impact. Do NOT use `effects: []` in `after` — that removes the tech from `combatTechnologies` entirely.
+
+**`effect` keyword semantics in `applyTechnologyEffects` (`unified-technologies.ts`):**
+- `"change"` → additive: `stat += value` for all properties including `moveSpeed`.
+- `"multiply"` → depends on the property:
+  - **`hitpoints`**: **additive stacking on pre-Phase-2 base HP**. Each multiplier contributes `(value - 1)` to a running delta, applied once: `HP_base × (1 + Σ(value - 1))`. e.g. ×1.25 + ×1.10 = HP × 1.35 (not ×1.375).
+  - **All other stats**: multiplicative chaining (`stat *= value`).
+- **Note:** `moveSpeed` previously had a special case where `"change"` was treated as a percentage (`stat *= 1 + value/100`). This is now commented out. Two raw techs (`do-maru-armor`, `kabura-ya-whistling-arrow`) use `change: 10` and are now broken (+10 t/s instead of +10%) — patch them to `multiply: 1.1` when needed.
+- Special properties (`maxRange`, `attackSpeed`, `rangedResistance`, `meleeVulnerability`, `healingRate`, `burst`, `costReduction`) are handled in Phase 3 with their own additive/multiplicative logic.
+
 **abilities.ts** = most frequently modified file. Add new unit special-cases here, not in combat.ts.
 
 ### Modifier target class encoding
 Raw JSON encodes composite class targets as nested arrays: `[['light', 'melee', 'infantry']]`.
 `combat.ts` builds `expandedTokens` from the defender's classes **and** all individual parts of compound classes (split on `_`). So `light_melee_infantry` adds `light`, `melee`, `infantry` as separate tokens. This means raw multi-token groups like `["light","melee","infantry"]` correctly match units that have the compound class `light_melee_infantry`.
+**Exception:** tokens immediately following `"non"` in a compound class are excluded from `expandedTokens` — e.g. `find_non_siege_land_military` splits to `["find","non","siege","land","military"]` but `"siege"` is negated (follows `"non"`) and not added. This prevents Horseman's `+13 vs siege` from falsely applying to Palace Guard. `"siege_range"` is unaffected since it contains no `"non"` prefix. **This same logic is duplicated in `UnitCard.tsx` (`expandedOpp` build loop) for the versus-mode bonus display — both must stay in sync.**
 **Rule for patches:** still prefer the underscore form: `target: { class: ['infantry_light'] }` — it's unambiguous and avoids multi-token groups.
 
 ---
