@@ -82,6 +82,7 @@ CombatEntity
   armor: { melee, ranged }
   moveSpeed          ← movement.speed (tiles/s); used for kiting
   continuousMovement ← bool (default false); if true + ranged speed > melee speed → melee TTK = null in kiting
+  selfDestructs      ← bool (default false); if true + hitsToKill > 1 → TTK/DPS = null (can never kill)
 ```
 
 ### Key exported utilities (unified-units.ts)
@@ -122,6 +123,8 @@ CombatEntity
 Charge speed boost: melee unit with `charge-attack` active gets ×1.2 move speed until first hit (affects kiting calculation).
 
 `continuousMovement` flag: if `ranged.continuousMovement === true` and `speedRanged > speedMelee`, melee TTK = null immediately (before the normal delta check). Must be set on each **variation** (not unit top-level) — `toCombatEntity` receives a `UnifiedVariation`, not the `AoE4Unit`. Use `after` at the unit level to spread it onto all variations: `u.variations = u.variations.map(v => ({ ...v, continuousMovement: true }))`. Example: Mangudai.
+
+`selfDestructs` flag: must be set on **each variation** (same as `continuousMovement`) — `toCombatEntity` receives a `UnifiedVariation`. Use `after` to spread onto both unit top-level and all variations. If `hitsToKill > 1` → TTK/DPS nulled out (unit cannot kill). Applied to: `explosive-dhow`, `demolition-ship`, `explosive-junk`, `lodya-demolition-ship`.
 
 ### Internal helpers
 - `getChargeWeapon(entity)` — finds secondary melee weapon with higher damage than primary (knight/ghulam only)
@@ -261,6 +264,7 @@ Same `foreignEngineering`/`foreignEngineeringUnits`/`uiTooltip` flags work on ab
 
 **`effect` keyword semantics in `applyTechnologyEffects` (`unified-technologies.ts`):**
 - `"change"` → additive: `stat += value` for all properties including `moveSpeed`.
+- `"siegeAttack"` / `"gunpowderAttack"` with `type: 'passive'` → mapped to `rangedAttack` slot (same stat, same weapon damage field). `type: 'bonus'` goes through the bonus damage path instead.
 - `"multiply"` → depends on the property:
   - **`hitpoints`**: **additive stacking on pre-Phase-2 base HP**. Each multiplier contributes `(value - 1)` to a running delta, applied once: `HP_base × (1 + Σ(value - 1))`. e.g. ×1.25 + ×1.10 = HP × 1.35 (not ×1.375).
   - **All other stats**: multiplicative chaining (`stat *= value`).
@@ -271,7 +275,7 @@ Same `foreignEngineering`/`foreignEngineeringUnits`/`uiTooltip` flags work on ab
 
 ### Modifier target class encoding
 Raw JSON encodes composite class targets as nested arrays: `[['light', 'melee', 'infantry']]`.
-`combat.ts` builds `expandedTokens` from the defender's classes **and** all individual parts of compound classes (split on `_`). So `light_melee_infantry` adds `light`, `melee`, `infantry` as separate tokens. This means raw multi-token groups like `["light","melee","infantry"]` correctly match units that have the compound class `light_melee_infantry`.
+Four places build an `expandedTokens` set from the unit's classes **and** all underscore-split parts: `combat.ts`, `applyTechnologyEffects`, `technologyAffectsUnit`, and the `tech.effects` block inside `getTechnologiesForUnit` (all in `unified-technologies.ts`). So `archer_ship` adds `archer` and `ship` as individual tokens, meaning raw multi-token groups like `["archer","ship"]` correctly match units with the compound class `archer_ship`. **All four must stay in sync** — if you change the logic in one, update the others.
 **Exception:** tokens immediately following `"non"` in a compound class are excluded from `expandedTokens` — e.g. `find_non_siege_land_military` splits to `["find","non","siege","land","military"]` but `"siege"` is negated (follows `"non"`) and not added. This prevents Horseman's `+13 vs siege` from falsely applying to Palace Guard. `"siege_range"` is unaffected since it contains no `"non"` prefix. **This same logic is duplicated in `UnitCard.tsx` (`expandedOpp` build loop) for the versus-mode bonus display — both must stay in sync.**
 **Rule for patches:** still prefer the underscore form: `target: { class: ['infantry_light'] }` — it's unambiguous and avoids multi-token groups.
 
