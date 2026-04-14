@@ -1,4 +1,10 @@
 {
+  "permissions": {
+    "allow": [
+      "Bash(python3 -c ':*)",
+      "Bash(node -e ':*)"
+    ]
+  },
   "hooks": {
     "PostToolUse": [
       {
@@ -11,11 +17,6 @@
           }
         ]
       }
-    ]
-  },
-  "permissions": {
-    "allow": [
-      "Bash(python3 -c ':*)"
     ]
   }
 }

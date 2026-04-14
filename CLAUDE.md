@@ -83,6 +83,7 @@ CombatEntity
   moveSpeed          ← movement.speed (tiles/s); used for kiting
   continuousMovement ← bool (default false); if true + ranged speed > melee speed → melee TTK = null in kiting
   selfDestructs      ← bool (default false); if true + hitsToKill > 1 → TTK/DPS = null (can never kill)
+  secondaryWeapons   ← UnifiedWeapon[] (default []); fired simultaneously, DPS summed with primary weapon
 ```
 
 ### Key exported utilities (unified-units.ts)
@@ -162,6 +163,11 @@ All synthetic abilities not present in raw aoe4world data. The 5 key ones:
 | `ability-shield-wall` | Limitanei (Byzantine) | Patched variation effects: `moveSpeed ×0.75` (−25%), `attackSpeed ×0.75` (25% faster attacks), `rangedResistance +30` (30% ranged damage reduction). Raw data had all three wrong (additive speed values, rangedArmor instead of resistance). |
 | `ability-trample` | Cataphract (Byzantine) | +12 first-hit bonus handled by `getChargeBonus` in Sandbox.tsx. Raw `meleeAttack +12` zeroed, `moveSpeed ×1.25` on variation effects (not `update.effects` — see PATCH SYSTEM note). |
 | `ability-fortitude` | Sipahi (Ottoman/Byzantine) | Raw variation had `change +0.67` (adds to cycle = slower). Corrected to `multiply ×0.67` on variations (= −33% cycle = +50% attacks/s). Duration 10s noted in uiTooltip but not modelled. |
+| `ability-dynasty-song` | Chinese (all, age 2+) | Synthetic. `moveSpeed ×1.15` targeting `find_non_siege_land_military` class (infantry + cavalry, excludes siege). |
+| `ability-dynasty-yuan` | Chinese (all, age 3+) | Synthetic. `moveSpeed ×1.15` targeting `find_non_siege_land_military` OR `naval_unit` (all non-siege units including ships). Icon: `/abilities/AoE4_YuanDynasty.png`. |
+| `ability-dynasty-ming` | Chinese (all, age 4) | Synthetic. `hitpoints ×1.15` targeting `military` class. Additive HP stacking. Icon: `/abilities/AoE4_MingDynasty.webp`. |
+| `ability-spirit-way` | Chinese dynasty units | Raw data has no effects. Patched via `after` with per-unit hard-fixed `attackSpeed multiply` values derived from in-game observations: Fire Lancer ×(1.31/1.625), Zhuge Nu ×(1.58/1.75), Grenadier ×(1.38/1.625). No uniform formula found — each unit type (melee/ranged/siege) shows different effective reduction. `uiTooltip`: "Only the attackSpeed increase is implemented". |
+| `ability-astronomical-clocktower` | Chinese (age 3+) | Synthetic. `hitpoints ×1.5` targeting `siege` class. Replaces the 5 separate `clocktower-*` unit variants (excluded via `EXCLUDED_UNIT_IDS` in `useUnitSlot.ts`). Applied as a **base-modifier** (see `BASE_MODIFYING_ABILITY_IDS`): its ×HP is multiplicative with Ming Dynasty/techs, not additive. Icon: `/abilities/ability_astronomicalclocktower.png`. |
 
 Charge weapon detection: secondary melee weapon with strictly higher damage than primary → used as `chargeWeapon` on hit 1.
 
@@ -252,6 +258,7 @@ Deep-partial merges on top of raw JSON data.
 `foreignEngineering: true` on a tech patch → added to `foreignEngineeringTechIds` (exported Set from `patches/technologies.ts`) → `TechnologySelector` renders it with orange border/bg **only when `selectedCiv === 'by'`** (prop passed from Sandbox.tsx). Other civs that have the tech natively see no special styling.
 `foreignEngineeringUnits: ['unit-id', ...]` on a patch → added to `foreignEngineeringUnitRestrictions` (exported `Map<string, string[]>`) → `useUnitSlot.ts` `techs` memo filters out the tech for Byzantine unless `unit.id` is in the list. Techs without `foreignEngineeringUnits` have no unit restriction.
 `excludedUnits: ['unit-id', ...]` on a patch → added to `techUnitExclusions` (exported `Map<string, string[]>`) → `useUnitSlot.ts` `techs` memo filters out the tech globally for those unit IDs regardless of civ.
+`injectWeapon: { unitId, weaponIndex? }` on a patch → added to `weaponInjectionMap` (exported `Map<string, { unitId, weaponIndex }>`) → `useUnitSlot.ts` computes `secondaryWeapons` from active techs → injected into `modifiedVariation` in Sandbox.tsx → `toCombatEntity` reads it → `computeMetrics` sums secondary DPS with primary DPS and recalculates TTK. The raw tech effect should be zeroed (`value: 0`) to avoid double-counting. Example: `thunderclap-bombs` → `nest-of-bees` weapon index 0 (Rocket Arrow, siege, 6 dmg × 7 burst).
 Same `foreignEngineering`/`foreignEngineeringUnits`/`uiTooltip` flags work on ability patches (`abilityPatches` in `patches/abilities.ts`). Exports: `foreignEngineeringAbilityIds` (Set) and `foreignEngineeringAbilityUnitRestrictions` (Map). `AbilitySelector` applies orange styling + `*` tooltip badge when `selectedCiv === 'by'`. `useUnitSlot.ts` `abilities` memo filters by unit restriction for Byz.
 ```
 `after` function available on both unit and variation level — used for injecting missing age variations (e.g. bedouin-swordsman, bedouin-skirmisher).
@@ -318,6 +325,8 @@ Read only relevant sections — never load whole file:
 - Tailwind for all styling; no CSS modules
 - shadcn/ui in `src/components/ui/` — prefer extending over rewriting
 - Special-case unit behaviors → `data/patches/` not `combat.ts`
+- `EXCLUDED_UNIT_IDS` (`useUnitSlot.ts`): set of unit IDs filtered out of `filteredUnits` regardless of civ. Currently excludes the 5 `clocktower-*` Chinese siege variants (replaced by `ability-astronomical-clocktower`). To exclude a unit globally, add its ID here.
+- `BASE_MODIFYING_ABILITY_IDS` (`useUnitSlot.ts`): set of ability IDs applied in a **separate 3rd pass** of `applyTechnologyEffects`, after techs and regular abilities. This makes their HP multiplier act as a final multiplier (multiplicative) rather than additive with the rest. Used for Clocktower: `HP_base × (1 + Σ_techs + Σ_abilities) × 1.5` instead of `HP_base × (1 + Σ_all)`. To add a new "base-modifying" ability, add its ID here.
 - `categorizeUnit(unit, selectedCiv?)`: `worker` class → `'other'`; `mercenary_byz` → `'mercenary'` **only if `selectedCiv === 'by'`** — prevents units like ghulam (which have `mercenary_byz` but are also Abbasid) from disappearing into the mercenary category for other civs
 - `setUnit` always clears `activeTechnologies` and `activeAbilities` on every unit switch (including non-null) — prevents stale techs from a previous unit/civ leaking onto the new selection
 - `modifiedStats` clamps `moveSpeed` to a maximum of 2.0 (game cap) after all tech/ability effects are applied
