@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(python3 -c ':*)",
-      "Bash(node -e ':*)"
+      "Bash(node -e ':*)",
+      "Bash(node -e \"const data = require\\('./src/data/all-optimized_tec.json'\\); const tech = data.find\\(t => t.id === 'silk-bowstrings'\\); console.log\\(JSON.stringify\\({effects: tech?.effects, v0effects: tech?.variations?.[0]?.effects}, null, 2\\)\\);\")",
+      "Bash(node -e \"const data = require\\('./src/data/all-optimized_tec.json'\\); const arr = Object.values\\(data\\).flat\\(\\); const tech = arr.find\\(t => t && t.id === 'silk-bowstrings'\\); console.log\\(JSON.stringify\\({effects: tech?.effects, v0effects: tech?.variations?.[0]?.effects}, null, 2\\)\\);\")",
+      "Bash(node -e ' *)"
     ]
   },
   "hooks": {
