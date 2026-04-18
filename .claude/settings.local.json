@@ -22,7 +22,8 @@
       "Bash(node ./node_modules/vite/bin/vite.js build)",
       "Bash(python3 -c ':*)",
       "Bash(python3)",
-      "Bash(python3 -c \"import json; data=json.load\\(open\\('src/data/all-unified.json'\\)\\); [print\\(v['age'],w['speed'],w['durations']['winddown'],w['durations']['reload']\\) for u in data for v in u.get\\('variations',[]\\) for w in v.get\\('weapons',[]\\) if u.get\\('id'\\)=='mangudai']\")"
+      "Bash(python3 -c \"import json; data=json.load\\(open\\('src/data/all-unified.json'\\)\\); [print\\(v['age'],w['speed'],w['durations']['winddown'],w['durations']['reload']\\) for u in data for v in u.get\\('variations',[]\\) for w in v.get\\('weapons',[]\\) if u.get\\('id'\\)=='mangudai']\")",
+      "Bash(node -e ' *)"
     ]
   }
 }

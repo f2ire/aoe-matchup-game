@@ -145,6 +145,8 @@ Pipeline: `UnitStats.healingRate` (initialized to 0) → `applyTechnologyEffects
 
 `VersusResult.winner` is `"draw" | "attacker" | "defender"` — **never a unit ID**. Sandbox.tsx compares against `'attacker'`/`'defender'` strings, not `versusData.attacker.id`, so mirrored units (same ID on both sides) produce correct left/right winner display.
 
+**Equal Cost winner logic:** `combatDuration = min(TTK_A, TTK_B)` — the fight ends when the first side dies. `damageTaken = groupDPS × combatDuration` for each side. Winner = side with more whole units remaining (`Math.floor(hpRemaining / unitHP)`); tiebreaker = raw `hpRemaining` when both floor to 0.
+
 ---
 
 ## ABILITIES (data/patches/abilities.ts)
@@ -163,6 +165,10 @@ All synthetic abilities not present in raw aoe4world data. The 5 key ones:
 | `ability-shield-wall` | Limitanei (Byzantine) | Patched variation effects: `moveSpeed ×0.75` (−25%), `attackSpeed ×0.75` (25% faster attacks), `rangedResistance +30` (30% ranged damage reduction). Raw data had all three wrong (additive speed values, rangedArmor instead of resistance). |
 | `ability-trample` | Cataphract (Byzantine) | +12 first-hit bonus handled by `getChargeBonus` in Sandbox.tsx. Raw `meleeAttack +12` zeroed, `moveSpeed ×1.25` on variation effects (not `update.effects` — see PATCH SYSTEM note). |
 | `ability-fortitude` | Sipahi (Ottoman/Byzantine) | Raw variation had `change +0.67` (adds to cycle = slower). Corrected to `multiply ×0.67` on variations (= −33% cycle = +50% attacks/s). Duration 10s noted in uiTooltip but not modelled. |
+| `ability-arrow-volley` | Longbowman + Wynguard Ranger (English/Byzantine via FEC) | Attack speed hard-overridden to 0.6s in `useUnitSlot.ts` post-calc (after all techs/abilities) — `if (activeAbilities.has('ability-arrow-volley')) result.attackSpeed = 0.6`. `foreignEngineering: true`, FEC restriction applies to `longbowman` only; `wynguard-ranger` added via variation effect `select.id` patch (no FEC required). Duration not modelled. |
+| `ability-council-hall` | Longbowman (English) | Synthetic. `costReduction ×0.95` (−5% cost). Age 2+. Icon: `/abilities/council-hall.png`. |
+| `ability-network-of-castles` | English (all land units) | Per-unit `attackSpeed multiply` from in-game measurements (2026/04/18). No uniform model — 15 unit corrections like Zeal. Announced +20%, effective avg +18.3%. `active:'manual'`. |
+| `ability-network-of-citadels` | English (all land units, age 3+) | Same approach as Castles. Announced +30%, effective avg +23.8%. `active:'manual'`. Mutually exclusive with Castles via `ABILITY_UPGRADE_GROUPS`. |
 | `ability-dynasty-song` | Chinese (all, age 2+) | Synthetic. `moveSpeed ×1.15` targeting `find_non_siege_land_military` class (infantry + cavalry, excludes siege). |
 | `ability-dynasty-yuan` | Chinese (all, age 3+) | Synthetic. `moveSpeed ×1.15` targeting `find_non_siege_land_military` OR `naval_unit` (all non-siege units including ships). Icon: `/abilities/AoE4_YuanDynasty.png`. |
 | `ability-dynasty-ming` | Chinese (all, age 4) | Synthetic. `hitpoints ×1.15` targeting `military` class. Additive HP stacking. Icon: `/abilities/AoE4_MingDynasty.webp`. |
@@ -184,6 +190,13 @@ Charge weapon detection: secondary melee weapon with strictly higher damage than
 - `lockedTechnologies: Set<string>` — derived memo returned from `useUnitSlot`; contains all IDs from `DEFAULT_ACTIVE_TECHS[selectedCiv]`. Passed to `TechnologySelector` → renders locked techs at 30% opacity with `cursor-not-allowed`; clicking is a no-op.
 - Current entry: `'by': ['howdahs']`.
 - To add: append to the relevant civ's array (or add a new civ key).
+
+### Ability upgrade/tier system (useUnitSlot.ts)
+`ABILITY_UPGRADE_GROUPS: readonly (readonly string[])[]` — exported module-level constant. Each entry is an ordered array of ability IDs forming a mutually exclusive tier chain (index 0 = tier 1, index 1 = tier 2, etc.).
+- `toggleAbility`: clicking an inactive ability deactivates all others in the group and activates the clicked one. Clicking the currently active ability deactivates it (unlike `WEAPON_SWAP_GROUPS` where clicking active = no-op).
+- No visual badge — mutual exclusion is enforced silently (selecting one deactivates the other).
+- Current entries: `['ability-dynasty-song', 'ability-dynasty-yuan', 'ability-dynasty-ming']` — Chinese dynasties (tier 1/2/3); `['ability-network-of-castles', 'ability-network-of-citadels']` — Network of Castles (tier 1) upgrades to Network of Citadels (tier 2).
+- To add a new upgrade chain: append an ordered array of ability IDs to `ABILITY_UPGRADE_GROUPS` in `useUnitSlot.ts`. No other changes needed.
 
 ### Weapon-swap unit system (useUnitSlot.ts)
 Generalised for desert-raider and manjaniq via `WEAPON_SWAP_GROUPS` and `WEAPON_SWAP_DEFAULTS`:

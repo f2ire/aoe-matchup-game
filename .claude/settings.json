@@ -5,7 +5,11 @@
       "Bash(node -e ':*)",
       "Bash(node -e \"const data = require\\('./src/data/all-optimized_tec.json'\\); const tech = data.find\\(t => t.id === 'silk-bowstrings'\\); console.log\\(JSON.stringify\\({effects: tech?.effects, v0effects: tech?.variations?.[0]?.effects}, null, 2\\)\\);\")",
       "Bash(node -e \"const data = require\\('./src/data/all-optimized_tec.json'\\); const arr = Object.values\\(data\\).flat\\(\\); const tech = arr.find\\(t => t && t.id === 'silk-bowstrings'\\); console.log\\(JSON.stringify\\({effects: tech?.effects, v0effects: tech?.variations?.[0]?.effects}, null, 2\\)\\);\")",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(node -e \"const d = require\\('./src/data/all-unified.json'\\); const u = d.find\\(u => u.id === 'wynguard-footman'\\); console.log\\(JSON.stringify\\(u?.variations?.map\\(v => \\({age: v.age, costs: v.costs}\\)\\), null, 2\\)\\)\")",
+      "Bash(node -e \"const d = require\\('./src/data/all-unified.json'\\); const arr = Array.isArray\\(d\\) ? d : Object.values\\(d\\).flat\\(\\); const u = arr.find\\(u => u.id === 'wynguard-footman'\\); console.log\\(JSON.stringify\\(u?.variations?.map\\(v => \\({age: v.age, costs: v.costs}\\)\\), null, 2\\)\\)\")",
+      "Bash(node -e \"const d = require\\('./src/data/all-optimized_tec.json'\\); const t = d.data.find\\(t => t.id === 'armor-clad'\\); console.log\\(JSON.stringify\\(t?.effects, null, 2\\)\\)\")",
+      "Bash(node -e \"const d = require\\('./src/data/all-optimized_tec.json'\\); const t = d.data.find\\(t => t.id === 'armor-clad'\\); console.log\\(JSON.stringify\\(t?.variations?.[0]?.effects, null, 2\\)\\)\")"
     ]
   },
   "hooks": {
