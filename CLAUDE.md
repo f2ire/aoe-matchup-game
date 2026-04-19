@@ -214,6 +214,14 @@ Generalised for desert-raider and manjaniq via `WEAPON_SWAP_GROUPS` and `WEAPON_
 - Current entry: `'ability-royal-knight-charge-damage'` requires `'charge-attack'`.
 - To add a new dependency: append `{ 'ability-id': 'required-ability-id' }` to `ABILITY_DEPENDENCIES` in `useUnitSlot.ts`. No other changes needed.
 
+### Ability-gated techs (TECH_ABILITY_DEPENDENCIES)
+`TECH_ABILITY_DEPENDENCIES: Record<string, string>` — maps a tech ID to a required ability ID. The tech is visible but locked in the UI unless that ability is also active.
+- `toggleTechnology`: activation is a silent no-op if the required ability is not active (uses `activeAbilitiesRef` to avoid closure dep).
+- `toggleAbility`: deactivating an ability automatically removes all dependent techs via `setActiveTechnologies` inside the ability setter.
+- `lockedTechnologies` memo: includes techs in `TECH_ABILITY_DEPENDENCIES` whose required ability is absent. `TechnologySelector` renders them at 30% opacity with `cursor-not-allowed`.
+- Current entry: `'enlistment-incentives'` requires `'ability-keep-influence'`. The −5% `costReduction` lives in `techAbilityInteractions` (not in the tech patch) so it only applies when both are simultaneously active. Tech patch keeps a no-op `value: 1.0` multiply to remain visible in `isCombatTechnology`.
+- To add a new entry: append `{ 'tech-id': 'required-ability-id' }` to `TECH_ABILITY_DEPENDENCIES` in `useUnitSlot.ts`. No other changes needed.
+
 ### Tech-gated abilities (ABILITY_TECH_DEPENDENCIES)
 `ABILITY_TECH_DEPENDENCIES: Record<string, string>` — maps an ability ID to a required technology ID. The ability is visible but locked unless that tech is also active.
 - `toggleAbility`: activation is a silent no-op if the required tech is not active (uses `activeTechnologiesRef` to avoid closure dep).
@@ -271,6 +279,7 @@ Deep-partial merges on top of raw JSON data.
 { id: string, reason: string, update: DeepPartial<T>, uiTooltip?: string, foreignEngineering?: boolean }
 
 `foreignEngineering: true` on a tech patch → added to `foreignEngineeringTechIds` (exported Set from `patches/technologies.ts`) → `TechnologySelector` renders it with orange border/bg **only when `selectedCiv === 'by'`** (prop passed from Sandbox.tsx). Other civs that have the tech natively see no special styling.
+`uiTooltipNative?: string` on a tech patch → shown in `TechnologySelector` for the **native civ** when `foreignEngineering: true` (i.e. the civ that owns the tech natively, not Byzantine). `uiTooltip` is reserved for the Byzantine FEC tooltip. Use `uiTooltipNative` to describe stat effects visible to the native civ (e.g. "+20% attack speed on Arbalétrier." on `gambesons` for French).
 `foreignEngineeringUnits: ['unit-id', ...]` on a patch → added to `foreignEngineeringUnitRestrictions` (exported `Map<string, string[]>`) → `useUnitSlot.ts` `techs` memo filters out the tech for Byzantine unless `unit.id` is in the list. Techs without `foreignEngineeringUnits` have no unit restriction.
 `excludedUnits: ['unit-id', ...]` on a patch → added to `techUnitExclusions` (exported `Map<string, string[]>`) → `useUnitSlot.ts` `techs` memo filters out the tech globally for those unit IDs regardless of civ.
 `injectWeapon: { unitId, weaponIndex? }` on a patch → added to `weaponInjectionMap` (exported `Map<string, { unitId, weaponIndex }>`) → `useUnitSlot.ts` computes `secondaryWeapons` from active techs → injected into `modifiedVariation` in Sandbox.tsx → `toCombatEntity` reads it → `computeMetrics` sums secondary DPS with primary DPS and recalculates TTK. The raw tech effect should be zeroed (`value: 0`) to avoid double-counting. Example: `thunderclap-bombs` → `nest-of-bees` weapon index 0 (Rocket Arrow, siege, 6 dmg × 7 burst).
@@ -288,7 +297,20 @@ Same `foreignEngineering`/`foreignEngineeringUnits`/`uiTooltip` flags work on ab
 
 **Ability-level vs variation-level effects — double-application pitfall:** `getAbilityVariation` (`unified-abilities.ts`) **concatenates** variation effects + ability-level effects: `mergedEffects = [...variationEffects, ...ability.effects]`. If the same effect list is set at both levels (e.g. synthetic abilities created with identical `effects` on the ability and its variation), it applies twice. Rule: put effects at **one level only**. For `charge-attack`, effects live at the ability level; the variation has `effects: []`.
 
-**Zeroing a raw effect without hiding the tech:** `isCombatTechnology` (called at module load) filters out techs with no combat effects → they disappear from the selector. To nullify a raw effect while keeping the tech visible, use `update: { effects: [{ ...same shape, value: 0 }] }` — the effect still matches the unit (so the tech appears) but has zero stat impact. Do NOT use `effects: []` in `after` — that removes the tech from `combatTechnologies` entirely.
+**Adding effects in tech patches — canonical patterns:** `applyTechnologyEffects` always reads `tech.effects` (top-level). If top-level is non-empty, `variation.effects` are completely ignored (overwritten at line 289 of `unified-technologies.ts`). Two correct patterns — never modify `variations[].effects` for stat effects:
+- **Raw effects empty** → `update: { effects: [newEffect] }` (deepMerge replaces empty array)
+- **Raw effects to preserve** → `after: (tech) => ({ ...tech, effects: [...(tech.effects || []), newEffect] })`
+
+**Zeroing a raw effect without hiding the tech:** `isCombatTechnology` (called at module load) filters out techs with no combat effects → they disappear from the selector. To nullify a raw effect while keeping the tech visible, use `update: { effects: [{ ...same shape, value: 0 }] }` — the effect still matches the unit (so the tech appears) but has zero stat impact.
+
+**Hiding a tech completely (remove from selector):** Both `isCombatTechnology` AND `getTechnologiesForUnit` check `variation.effects` as a fallback when `tech.effects` is empty. `update: { effects: [] }` only clears top-level — variations survive. Use `after` to clear both:
+```ts
+after: (tech) => ({
+  ...tech,
+  effects: [],
+  variations: tech.variations.map((v: any) => ({ ...v, effects: [] })),
+})
+```
 
 **`effect` keyword semantics in `applyTechnologyEffects` (`unified-technologies.ts`):**
 - `"change"` → additive: `stat += value` for all properties including `moveSpeed`.
