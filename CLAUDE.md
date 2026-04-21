@@ -347,8 +347,9 @@ after: (tech) => ({
   - **`hitpoints`**: **additive stacking on pre-Phase-2 base HP**. Each multiplier contributes `(value - 1)` to a running delta, applied once: `HP_base × (1 + Σ(value - 1))`. e.g. ×1.25 + ×1.10 = HP × 1.35 (not ×1.375).
   - **All other stats**: multiplicative chaining (`stat *= value`).
 - **Note:** `moveSpeed` previously had a special case where `"change"` was treated as a percentage (`stat *= 1 + value/100`). This is now commented out. Two raw techs (`do-maru-armor`, `kabura-ya-whistling-arrow`) use `change: 10` and are now broken (+10 t/s instead of +10%) — patch them to `multiply: 1.1` when needed.
-- Special properties (`maxRange`, `attackSpeed`, `rangedResistance`, `meleeResistance`, `healingRate`, `burst`, `costReduction`, `stoneCostReduction`) are handled in Phase 3 with their own additive/multiplicative logic.
+- Special properties (`maxRange`, `attackSpeed`, `rangedResistance`, `meleeResistance`, `healingRate`, `burst`, `costReduction`, `stoneCostReduction`, `chargeMultiplier`) are handled in Phase 3 with their own additive/multiplicative logic.
 - `stoneCostReduction` → `UnitStats.stoneCostMultiplier` — stone-only cost multiplier, applied in Sandbox.tsx on top of `costMultiplier` for the stone resource only. Use when a tech reduces only stone (e.g. `stone-armies` for torguud: 100 → 80 stone, food stays at 75). Generic `costReduction` would incorrectly reduce all resources.
+- `chargeMultiplier` → `UnitStats.chargeMultiplier` — first-hit charge bonus = `primaryWeapon.damage × chargeMultiplier`. Requires `charge-attack` to be active. Passed as 5th arg to `getChargeBonus(unitData, abilities, age, techs, chargeMultiplier?)` in Sandbox.tsx. Knight/ghulam/firelancer/cataphract/kipchak take priority via early return — `chargeMultiplier` only applies to other melee units. Additive stacking (`change`). Example: `burgrave-palace-age-up` → `melee_infantry` × 0.5 (50% of primary weapon damage).
 
 **abilities.ts** = most frequently modified file. Add new unit special-cases here, not in combat.ts.
 
@@ -408,7 +409,7 @@ Read only relevant sections — never load whole file:
 - `categorizeUnit(unit, selectedCiv?)`: `worker` class → `'other'`; `mercenary_byz` → `'mercenary'` **only if `selectedCiv === 'by'`** — prevents units like ghulam (which have `mercenary_byz` but are also Abbasid) from disappearing into the mercenary category for other civs
 - `setUnit` always clears `activeTechnologies` and `activeAbilities` on every unit switch (including non-null) — prevents stale techs from a previous unit/civ leaking onto the new selection
 - `modifiedStats` clamps `moveSpeed` to a maximum of 2.0 (game cap) after all tech/ability effects are applied
-- HRE infantry passive: `modifiedStats` applies `moveSpeed ×1.1` for `selectedCiv === 'hr'` + infantry class — formerly a technology, now a baked-in passive absent from raw data. Applied before the 2.0 cap. Exception: `landsknecht` also gets the bonus when `selectedCiv === 'by'` (mercenary use).
+- HRE infantry passive: `modifiedStats` applies `moveSpeed ×1.1` for `selectedCiv === 'hr'` + infantry class — formerly a technology, now a baked-in passive absent from raw data. Applied before the 2.0 cap. Age I exception: `×1.05` instead of `×1.1`. Exception: `landsknecht` also gets the bonus when `selectedCiv === 'by'` (mercenary use).
 - **Mercenary category**: `DEFAULT_OPEN_CATEGORIES.mercenary = false` (collapsed by default). In Sandbox.tsx, `getMercenarySubCategory` sub-groups them as Melee Infantry / Ranged Infantry / Melee Cavalry / Ranged Cavalry / Siege using `MERCENARY_SUB_ORDER`. Rendered with italic sub-labels inside the single collapsible SelectGroup. No `(mercenary)` badge — category is self-explanatory.
 - Unit data is immutable; apply techs/abilities at display/computation time via hooks
 - `cn()` from `src/lib/utils.ts` for conditional classNames
