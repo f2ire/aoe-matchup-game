@@ -27,7 +27,11 @@
       "Bash(node -e \"const d = require\\('./src/data/all-optimized_tec.json'\\); const t = d.find\\(x => x.id === 'chivalry'\\); console.log\\('effects:', JSON.stringify\\(t?.effects\\)\\); console.log\\('var effects:', JSON.stringify\\(t?.variations?.[0]?.effects\\)\\)\")",
       "Bash(node -e \"const d = require\\('./src/data/all-optimized_tec.json'\\); const keys = Object.keys\\(d\\); const arr = d[keys[0]]; const t = arr.find\\(x => x.id === 'chivalry'\\); console.log\\('effects:', JSON.stringify\\(t?.effects?.slice\\(0,2\\)\\)\\); console.log\\('var0 effects:', JSON.stringify\\(t?.variations?.[0]?.effects?.slice\\(0,2\\)\\)\\)\")",
       "Bash(node -e \"const d = require\\('./src/data/all-optimized_tec.json'\\); console.log\\(typeof d, Array.isArray\\(d\\), Object.keys\\(d\\).slice\\(0,3\\)\\)\")",
-      "Bash(node -e \"const d = require\\('./src/data/all-optimized_tec.json'\\).data; const t = d.find\\(x => x.id === 'chivalry'\\); console.log\\('effects:', JSON.stringify\\(t?.effects\\)\\); console.log\\('var0 effects:', JSON.stringify\\(t?.variations?.[0]?.effects?.slice\\(0,1\\)\\)\\)\")"
+      "Bash(node -e \"const d = require\\('./src/data/all-optimized_tec.json'\\).data; const t = d.find\\(x => x.id === 'chivalry'\\); console.log\\('effects:', JSON.stringify\\(t?.effects\\)\\); console.log\\('var0 effects:', JSON.stringify\\(t?.variations?.[0]?.effects?.slice\\(0,1\\)\\)\\)\")",
+      "Bash(node -e \"const d=require\\('./src/data/all-optimized_tec.json'\\); const t=d.find\\(t=>t.id==='incendiary-arrows'\\); console.log\\(JSON.stringify\\(t, null, 2\\)\\)\")",
+      "Bash(grep -n \"GOLDEN HORDE\\\\|gol\\\\|//____\" src/data/patches/units.ts)",
+      "Bash(grep -n \"//___\\\\|MONGOL\\\\|GOLDEN\\\\|AYYUB\\\\|OTTOM\\\\|DELHI\\\\|FRENCH\\\\|CHINESE\\\\|ENGLISH\\\\|BYSANT\\\\|BYZAN\\\\|HRE\\\\|RUS\\\\|JAPANE\\\\|MALIAN\\\\|ABBA\\\\|ZIYANID\" src/data/patches/units.ts)",
+      "Bash(python -c ' *)"
     ]
   }
 }

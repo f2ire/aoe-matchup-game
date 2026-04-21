@@ -131,8 +131,19 @@ Charge speed boost: melee unit with `charge-attack` active gets ×1.2 move speed
 - `getChargeWeapon(entity)` — finds secondary melee weapon with higher damage than primary (knight/ghulam only)
 - `isRangedUnit(entity)`, `getMaxRange(entity)`, `getRetreatTime(entity)` — kiting helpers
 
+### Secondary weapons in computeMetrics
+`computeMetrics` accepts a `discreteTTK: boolean = false` flag that controls how secondary weapons affect TTK:
+
+**Discrete model** (`discreteTTK = true` — used by `computeVersus`): secondary damage per primary cycle = `totalSecDPS × primaryAttackSpeed`. First cycle uses `firstHitSpeed` (differs when a charge weapon is active). `firstAttackData` already includes charge/bleed bonus, so the first-hit reduction is preserved. HTK and TTK are:
+- `effectiveFirstCycle = firstAttackData.value × attackerMultiplier + totalSecDPS × firstHitSpeed`
+- `effectiveNormalCycle = normalAttackData.value × attackerMultiplier + totalSecDPS × attackSpeed`
+- `HTK = 1 + Math.ceil((HP − effectiveFirstCycle) / effectiveNormalCycle)`
+- `TTK = firstHitSpeed + (HTK − 1) × attackSpeed`
+
+**Continuous model** (`discreteTTK = false` — default, used by `computeVersusAtEqualCost`): `dps += totalSecDPS`, then `TTK = HP / combinedDPS`, `HTK = ceil(TTK / attackSpeed)`. Kept for equal-cost mode where group scaling makes continuous DPS the appropriate approximation.
+
 ### Healing mechanic
-`CombatEntity.healingRate` (HP/hit) — defender heals this amount for each hit it lands. In `computeMetrics`, after base TTK is computed:
+`CombatEntity.healingRate` (HP/hit) — defender heals this amount for each hit it lands. In `computeMetrics`, after base TTK is computed (before secondary weapons):
 - `healPerS = healingRate / defenderAttackSpeed`
 - `netDPS = attackerDPS − healPerS`
 - if `netDPS ≤ 0` → defender is immortal (`hitsToKill = null`, `timeToKill = null`)
@@ -176,6 +187,13 @@ All synthetic abilities not present in raw aoe4world data. The 5 key ones:
 
 **`zeal` tech (Ottoman):** Raw value 0.7 → corrected base to ×1/1.5. Per-unit correction factors applied on top via `after` (chained multiply). No uniform model found — average effective buff is −28.3% cycle (+39.4% AS, not +50%). Corrections: man-at-arms ×(1.5/1.375), archer ×(1.875/1.625), crossbowman ×(2.295/2.125), handcannoneer ×(2.37/2.125), tower-elephant/sultans-elite/war-elephant ×(3.0/2.875), lancer ×1.08, ghazi-raider ×0.96 (outlier: faster than theory). Spearman matches theory exactly (no correction).
 | `ability-astronomical-clocktower` | Chinese (age 3+) | Synthetic. `hitpoints ×1.5` targeting `siege` class. Replaces the 5 separate `clocktower-*` unit variants (excluded via `EXCLUDED_UNIT_IDS` in `useUnitSlot.ts`). Applied as a **base-modifier** (see `BASE_MODIFYING_ABILITY_IDS`): its ×HP is multiplicative with Ming Dynasty/techs, not additive. Icon: `/abilities/ability_astronomicalclocktower.png`. |
+| `ability-khan-warcry-2/3/4` | Mongols + Golden Horde (`mo`, `gol`) | Synthetic. Three mutually-exclusive tiers (age 2/3/4) in `ABILITY_UPGRADE_GROUPS`: `meleeAttack` and `rangedAttack` ×1.1/×1.2/×1.3 targeting `annihilation_condition` class. Icon: `/abilities/khan-warcry.png`. |
+| `ability-defensive-aura-edict` | Golden Horde (`gol`) | Raw effects empty. Patched: `hitpoints ×1.1` with no `select` (applies to all units). `active:'always'` auto-activates on unit select. |
+| `ability-kharash-aura` | Golden Horde (`gol`) | Synthetic. `meleeArmor +1` and `rangedArmor +1` targeting `find_non_siege_land_military` (all non-siege land military). Icon: `/abilities/kharash-aura.png`. |
+| `ability-glorious-charge` | Golden Horde (`gol`) | Raw effects empty. Patched: `moveSpeed ×1.5`, `rangedResistance +15`, `meleeResistance +15` (−15% all damage) targeting `military`. `minAge` corrected to 3. Duration (30s) not modelled. |
+| `ability-khan-debuff-arrow` | Golden Horde (`gol`) | Synthetic. Khan fires a signal arrow: enemies in area take +10% damage. Modelled as `meleeAttack`, `rangedAttack`, `siegeAttack` `×1.1` targeting `annihilation_condition` class, `excludeId: ['battering-ram']`. Icon: aoe4world tech icon URL. Duration (10s) not modelled. |
+| Kipchak Archer bleed | Kipchak Archer (`gol`) | No ability — hardcoded in `getChargeBonus` (`Sandbox.tsx`): base +12 for `baseId === 'kipchak-archer'`; +5.2 added when `incendiary-arrows` is active (4th param `activeTechnologies: Set<string>` passed at all 4 call sites). Formula label shows "Bleed" (detected via `kipchak_archer` class in `combat.ts`). UnitCard label uses `chargeBonusLabel` field on the bonus object (set in Sandbox.tsx alignment phase, defaults to `'Charge'`). |
+| `stone-armies` tech | Rus Tribute (`gol`) | Age-4 variation (`rus-tribute-4`) removed via `patches/units.ts` `after` — its stats are instead granted by this tech: `hitpoints +30`, `meleeAttack +4`, `meleeAttack bonus +5 vs cavalry` (3→8), `meleeArmor +1`, `rangedArmor +1`. Also reduces torguud stone cost ×0.8 (`stoneCostReduction`). Tech class `age_up_upgrade` → shows in AGE row of TechnologySelector. |
 
 Charge weapon detection: secondary melee weapon with strictly higher damage than primary → used as `chargeWeapon` on hit 1.
 
@@ -197,6 +215,13 @@ Charge weapon detection: secondary melee weapon with strictly higher damage than
 - No visual badge — mutual exclusion is enforced silently (selecting one deactivates the other).
 - Current entries: `['ability-dynasty-song', 'ability-dynasty-yuan', 'ability-dynasty-ming']` — Chinese dynasties (tier 1/2/3); `['ability-network-of-castles', 'ability-network-of-citadels']` — Network of Castles (tier 1) upgrades to Network of Citadels (tier 2).
 - To add a new upgrade chain: append an ordered array of ability IDs to `ABILITY_UPGRADE_GROUPS` in `useUnitSlot.ts`. No other changes needed.
+- Current entries include: Chinese dynasties, Network of Castles/Citadels, Khan War Cry tiers (`ability-khan-warcry-2/3/4`).
+
+### Ability display row grouping (AbilitySelector.tsx)
+`ABILITY_ROW_GROUPS: readonly { label: string; ids: readonly string[] }[]` — exported from `patches/abilities.ts`. Each entry reserves a dedicated visual row in the ability grid with a short label (shown as `LABEL:` on the left). Abilities not listed in any group share the default `ABI:` row (always rendered first). Rows render in array order after the default row.
+- `AbilitySelector` splits the incoming `abilities` array into default + named rows, then renders each as a `renderRow` call (same 4-column age grid per row, label on left matching `TechnologySelector` style).
+- To add a new reserved row: append `{ label: 'XYZ', ids: ['ability-id-1', ...] }` to `ABILITY_ROW_GROUPS` in `patches/abilities.ts`. No other changes needed.
+- Current entries: `{ label: 'WC', ids: ['ability-khan-warcry-2', 'ability-khan-warcry-3', 'ability-khan-warcry-4'] }`.
 
 ### Weapon-swap unit system (useUnitSlot.ts)
 Generalised for desert-raider and manjaniq via `WEAPON_SWAP_GROUPS` and `WEAPON_SWAP_DEFAULTS`:
@@ -257,12 +282,12 @@ Raw weapons: `[0]` Mangonel (siege, dmg 10, burst 3, +30 vs building/naval_unit,
 ```
 To add a new interaction: append an entry to `techAbilityInteractions` in `patches/abilities.ts`. No changes needed in `useUnitSlot.ts`.
 
-### rangedResistance / meleeVulnerability in UnitStats / applyTechnologyEffects
+### rangedResistance / meleeResistance in UnitStats / applyTechnologyEffects
 `UnitStats.rangedResistance?: number` (percentage 0–100) is initialized from the unit's existing ranged resistance via `getResistanceValue(data, 'ranged')` in `useUnitSlot.ts`. Abilities/techs may add to it via `effect: 'change', value: 30` (+30 pp) or `effect: 'multiply'`.
 `applyTechnologyEffects` handles it as a special property (Phase 3, like attackSpeed). All 4 modified entity objects in `Sandbox.tsx` (`modifiedVariationAlly/Enemy`, `modifiedUnit1/2`) override their `resistance` array with the computed value, so `combat.ts`'s `getResistanceValue` picks it up correctly.
 
-`UnitStats.meleeVulnerability?: number` (percentage 0–100) — same pipeline as `rangedResistance` but for incoming melee damage amplification. Initialized to 0 in `baseStats`. Injected into resistance array as `{ type: 'melee_vulnerability', value }`. In `combat.ts`, read via `getResistanceValue(defender, 'melee_vulnerability')` when `weapon.type === 'melee'` → multiplies damage by `(1 + pct/100)`. Current use: `ability-fortitude` (Sipahi) applies `+50` while active.
-Display in `UnitCard.tsx`: Melee Armor value turns orange with dotted underline + tooltip when `meleeVulnerability > 0`. A dedicated "Melee Vuln. +X%" line appears below Melee Armor in both the compact stat block and the detailed panel.
+`UnitStats.meleeResistance?: number` — **unified signed stat**: positive = melee damage reduction (%), negative = melee damage amplification (vulnerability). Initialized from `getResistanceValue(data, 'melee')`. Injected into resistance array as `{ type: 'melee', value }` when non-zero. In `combat.ts`, read automatically via `getResistanceValue(defender, 'melee')` → `damage × (1 − pct/100)` (negative pct amplifies damage). Current uses: `ability-glorious-charge` applies `+15`; `ability-fortitude` (Sipahi) applies `−50` (vulnerability).
+Display in `UnitCard.tsx`: when `meleeResistance > 0`, Melee Armor value gets neutral dotted underline + tooltip (same as ranged resistance); detailed panel also shows a "Melee Resist. X%" row. When `meleeResistance < 0`, Melee Armor value turns orange with dotted underline + tooltip, and a "Melee Vuln. +X%" line appears below it.
 
 ### Camel Lancer charge mechanics
 - Has `knight` class → `charge-attack` auto-activates and applies knight-tier bonus damage (+10/12/14 age 2/3/4).
@@ -282,13 +307,16 @@ Deep-partial merges on top of raw JSON data.
 `uiTooltipNative?: string` on a tech patch → shown in `TechnologySelector` for the **native civ** when `foreignEngineering: true` (i.e. the civ that owns the tech natively, not Byzantine). `uiTooltip` is reserved for the Byzantine FEC tooltip. Use `uiTooltipNative` to describe stat effects visible to the native civ (e.g. "+20% attack speed on Arbalétrier." on `gambesons` for French).
 `foreignEngineeringUnits: ['unit-id', ...]` on a patch → added to `foreignEngineeringUnitRestrictions` (exported `Map<string, string[]>`) → `useUnitSlot.ts` `techs` memo filters out the tech for Byzantine unless `unit.id` is in the list. Techs without `foreignEngineeringUnits` have no unit restriction.
 `excludedUnits: ['unit-id', ...]` on a patch → added to `techUnitExclusions` (exported `Map<string, string[]>`) → `useUnitSlot.ts` `techs` memo filters out the tech globally for those unit IDs regardless of civ.
-`injectWeapon: { unitId, weaponIndex? }` on a patch → added to `weaponInjectionMap` (exported `Map<string, { unitId, weaponIndex }>`) → `useUnitSlot.ts` computes `secondaryWeapons` from active techs → injected into `modifiedVariation` in Sandbox.tsx → `toCombatEntity` reads it → `computeMetrics` sums secondary DPS with primary DPS and recalculates TTK. The raw tech effect should be zeroed (`value: 0`) to avoid double-counting. Example: `thunderclap-bombs` → `nest-of-bees` weapon index 0 (Rocket Arrow, siege, 6 dmg × 7 burst).
+`unitTooltips: { 'unit-id': 'text' }` on a patch → `TechnologySelector` receives the current unit's `baseId` via the `unitId` prop (passed as `variationAlly?.baseId ?? unit1?.id` from Sandbox.tsx). When a match is found, the unit-specific tooltip overrides `uiTooltip`/`uiTooltipNative`. Use for effects that only apply to one unit (e.g. `incendiary-arrows` → `'+5.2 Bleed damage.'` for `kipchak-archer`).
+`injectWeapon: { unitId, weaponIndex?, damageMultiplier?, burstCount?, maxDamage? }` on a patch → added to `weaponInjectionMap` (exported `Map<string, { unitId, weaponIndex, damageMultiplier?, burstCount?, maxDamage? }>`) → `useUnitSlot.ts` computes `secondaryWeapons` from active techs → injected into `modifiedVariation` in Sandbox.tsx → `toCombatEntity` reads it → `computeMetrics` sums secondary DPS with primary DPS and recalculates TTK and HTK. The raw tech effect should be zeroed (`value: 0`) to avoid double-counting. `burstCount` overrides the weapon's burst. `damageMultiplier` (e.g. `0.3`) scales secondary ranged damage as `modifiedStats.rangedAttack × damageMultiplier` instead of full ranged attack — stored on weapon as `w.damageMultiplier`, applied in Sandbox.tsx. `maxDamage` caps the final computed damage of the secondary weapon (applied after all multipliers and debuffs) — e.g. `triple-shot` → `maxDamage: 10`. Example: `thunderclap-bombs` → `nest-of-bees` weapon index 0. `triple-shot` → `kipchak-archer` weapon 0, `damageMultiplier: 0.3`, `burstCount: 2`, `maxDamage: 10`. Raw effects had no `select` → replaced with `{ property: 'rangedAttack', select: { id: ['kipchak-archer'] }, value: 0 }` to keep the tech visible without double-counting.
 **Always-active secondary weapons** (no tech required): set `secondaryWeapons: [weapon]` on the unit's variations via `patches/units.ts` `after` function. `useUnitSlot.ts` `secondaryWeapons` memo reads `variation.secondaryWeapons` first, then appends tech-injected ones. `UnifiedVariation` has `secondaryWeapons?: UnifiedWeapon[]`. Examples: `tower-elephant` — Bow (dmg 15, speed 1.375) with `burst: { count: 2 }` added by patch. `sultans-elite-tower-elephant` — Handcannon (dmg 38, speed 1.625, `burst: { count: 2 }` already in raw data) moved to `secondaryWeapons` by patch. `war-elephant` — Spear (dmg 25, speed 1.875, melee type) with modifiers +40 vs cavalry / +6 vs war_elephant / +34 vs worker_elephant preserved from raw data.
 **Secondary weapon scaling in Sandbox.tsx** (applied in all 4 blocks — `modifiedVariationAlly/Enemy` and `modifiedUnit1/2`):
-- **Ranged/siege secondary** `damage` = `modifiedStats.rangedAttack * debuffMultiplier`. `rangedAttack` is initialised in `useUnitSlot` from `secondaryWeapons[0].damage` when the primary weapon is melee (e.g. Tower Elephant Bow = 15), so ranged techs scale it correctly.
+- **Ranged/siege secondary** `damage`: two formulas depending on `w.damageMultiplier`:
+  - **No `damageMultiplier`** (default): `modifiedStats.rangedAttack × debuffMultiplier` — full ranged attack (e.g. Tower Elephant Bow).
+  - **With `damageMultiplier`** (e.g. Triple Shot = 0.3): `(rangedBase × damageMultiplier + flatDelta) × rangedAttackMultiplier × debuffMultiplier` — flat bonuses add directly, multiply techs (×1.2 etc.) scale the whole result. `rangedBase` = primary weapon damage if primary is ranged, else first ranged secondary weapon damage. `flatDelta = modifiedStats.rangedAttack / rangedAttackMultiplier − rangedBase` (flat-only delta). `rangedAttackMultiplier` = product of all `rangedAttack` multiply effects (tracked in `UnitStats.rangedAttackMultiplier`, computed in `applyTechnologyEffects` Phase 2). Result: base 3 + flat (+1/+2/+3) → 4/5/6; ×1.2 multiplier on top → ×1.2 ✓
 - **Melee secondary** `damage` = `(w.damage + meleeAttackDelta) * debuffMultiplier`, where `meleeAttackDelta = modifiedStats.meleeAttack − getPrimaryWeapon(source).damage`. This propagates flat melee attack tech bonuses (e.g. +5 on Tusks → +5 on Spear) and the debuff multiplier to the secondary melee weapon.
-- **Ranged/siege secondary** `modifiers` = `filterBonusForWeapon(bonusDamage, w.type)` (tech-enhanced class bonuses, filtered by type).
-- **Melee secondary** `modifiers` = `[...w.modifiers, ...filterBonusForWeapon(bonusDamage, 'melee')]` (weapon's own class bonuses merged with shared melee bonusDamage — e.g. Spear keeps +40 vs cavalry and also gains Tusks' +45 vs building + any tech bonuses).
+- **Ranged/siege secondary** `modifiers` = `filterBonusForWeapon(bonusDamage, w.type)` filtered to exclude `chargeBonusLabel` entries — charge/bleed bonus is a first-hit primary weapon bonus and must not propagate to secondary weapons (would inflate the displayed bleed value and apply it per-hit in combat).
+- **Melee secondary** `modifiers` = `[...w.modifiers, ...filterBonusForWeapon(bonusDamage, 'melee').filter(b => !b.fromWeapon)]` — weapon's own class bonuses merged with **tech-added** melee bonusDamage only. Raw primary weapon modifiers are tagged `fromWeapon: true` in `useUnitSlot.ts` (at `bonusDamage` init) and excluded here so they don't bleed onto unrelated secondary weapons (e.g. Spear keeps +40 vs cavalry but does NOT inherit Tusks' innate +45 vs building). A tech that adds a new vs-building bonus (no `fromWeapon`) still propagates normally.
 Same `foreignEngineering`/`foreignEngineeringUnits`/`uiTooltip` flags work on ability patches (`abilityPatches` in `patches/abilities.ts`). Exports: `foreignEngineeringAbilityIds` (Set) and `foreignEngineeringAbilityUnitRestrictions` (Map). `AbilitySelector` applies orange styling + `*` tooltip badge when `selectedCiv === 'by'`. `useUnitSlot.ts` `abilities` memo filters by unit restriction for Byz.
 ```
 `after` function available on both unit and variation level — used for injecting missing age variations (e.g. bedouin-swordsman, bedouin-skirmisher).
@@ -319,9 +347,16 @@ after: (tech) => ({
   - **`hitpoints`**: **additive stacking on pre-Phase-2 base HP**. Each multiplier contributes `(value - 1)` to a running delta, applied once: `HP_base × (1 + Σ(value - 1))`. e.g. ×1.25 + ×1.10 = HP × 1.35 (not ×1.375).
   - **All other stats**: multiplicative chaining (`stat *= value`).
 - **Note:** `moveSpeed` previously had a special case where `"change"` was treated as a percentage (`stat *= 1 + value/100`). This is now commented out. Two raw techs (`do-maru-armor`, `kabura-ya-whistling-arrow`) use `change: 10` and are now broken (+10 t/s instead of +10%) — patch them to `multiply: 1.1` when needed.
-- Special properties (`maxRange`, `attackSpeed`, `rangedResistance`, `meleeVulnerability`, `healingRate`, `burst`, `costReduction`) are handled in Phase 3 with their own additive/multiplicative logic.
+- Special properties (`maxRange`, `attackSpeed`, `rangedResistance`, `meleeResistance`, `healingRate`, `burst`, `costReduction`, `stoneCostReduction`) are handled in Phase 3 with their own additive/multiplicative logic.
+- `stoneCostReduction` → `UnitStats.stoneCostMultiplier` — stone-only cost multiplier, applied in Sandbox.tsx on top of `costMultiplier` for the stone resource only. Use when a tech reduces only stone (e.g. `stone-armies` for torguud: 100 → 80 stone, food stays at 75). Generic `costReduction` would incorrectly reduce all resources.
 
 **abilities.ts** = most frequently modified file. Add new unit special-cases here, not in combat.ts.
+
+### Effect with no `select` = matches all units
+In `abilityAffectsUnit`, `getAbilitiesForUnit` (`unified-abilities.ts`), **and** `applyTechnologyEffects` (`unified-technologies.ts`), an effect with no `select` field (or `select: {}`) is treated as matching **all units**. Use this when an ability applies universally (e.g. aura buffing every unit). Example: `ability-defensive-aura-edict` uses `{ property: 'hitpoints', effect: 'multiply', value: 1.1 }` with no `select`. Note: `technologyAffectsUnit` / `getTechnologiesForUnit` (tech visibility filters) do **not** have this shortcut — omitting `select` on a tech effect still hides the tech.
+
+### `select.excludeId` — explicit unit exclusion
+`TechnologyEffect.select.excludeId?: string[]` — list of unit base IDs that are excluded from the effect even when they match the `class` or `id` selector. Checked in three places: `applyTechnologyEffects` (stat application), `abilityAffectsUnit`, and `getAbilitiesForUnit` top-level effects check (both in `unified-abilities.ts`) — so the ability is hidden from excluded units entirely. Use case: `ability-kharash-aura` uses `excludeId: ['kharash']` so the kharash doesn't see or benefit from its own armor aura.
 
 ### Modifier target class encoding
 Raw JSON encodes composite class targets as nested arrays: `[['light', 'melee', 'infantry']]`.
