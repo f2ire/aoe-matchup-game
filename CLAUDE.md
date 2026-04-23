@@ -84,6 +84,7 @@ CombatEntity
   continuousMovement ← bool (default false); if true + ranged speed > melee speed → melee TTK = null in kiting
   selfDestructs      ← bool (default false); if true + hitsToKill > 1 → TTK/DPS = null (can never kill)
   secondaryWeapons   ← UnifiedWeapon[] (default []); fired simultaneously, DPS summed with primary weapon. Ranged secondaries are scaled by modifiedStats.rangedAttack in Sandbox.tsx (same as primary ranged weapons).
+  chargeArmorType    ← 'ranged' | undefined. If 'ranged', the first-hit chargeBonus is computed separately in `computeEffectiveDamage` using ranged armor + ranged resistance instead of the primary weapon's armor type. The primary weapon uses its own armor normally. Must be set on each variation via Sandbox.tsx injection. Current use: Earl's Guard dagger throw.
 ```
 
 ### Key exported utilities (unified-units.ts)
@@ -166,7 +167,7 @@ All synthetic abilities not present in raw aoe4world data. The 5 key ones:
 
 | ID | Unit | Effect |
 |---|---|---|
-| `charge-attack` | All melee | +20% move speed until first hit. Knights also get +10/12/14 bonus dmg (age 2/3/4). Ghulam +5/6 (age 3/4). Uses per-age logic in Sandbox.tsx |
+| `charge-attack` | All melee | +20% move speed until first hit. Knights also get +10/12/14 bonus dmg (age 2/3/4). Ghulam +5/6 (age 3/4). Demilancer (`hl`) +4/5/14 (age 2/3/4) — override via `baseId === 'demilancer'` in `getChargeBonus` before `isKnight` check. Uses per-age logic in Sandbox.tsx |
 | `ability-camel-unease` | Camel units | Passive debuff: nearby horse cavalry deal ×0.8 damage |
 | `ability-quick-strike` | Ghulam | Two rapid attacks: effective cycle = (base + 0.5) × 0.5. Applied as `attackSpeed` effects |
 | `ability-golden-age-tier-4` | Ayyubid (siege) | Siege units cost ×0.8 (−20%). Maps `property: "unknown"` → `costReduction` via patch |
@@ -192,7 +193,11 @@ All synthetic abilities not present in raw aoe4world data. The 5 key ones:
 | `ability-kharash-aura` | Golden Horde (`gol`) | Synthetic. `meleeArmor +1` and `rangedArmor +1` targeting `find_non_siege_land_military` (all non-siege land military). Icon: `/abilities/kharash-aura.png`. |
 | `ability-glorious-charge` | Golden Horde (`gol`) | Raw effects empty. Patched: `moveSpeed ×1.5`, `rangedResistance +15`, `meleeResistance +15` (−15% all damage) targeting `military`. `minAge` corrected to 3. Duration (30s) not modelled. |
 | `ability-khan-debuff-arrow` | Golden Horde (`gol`) | Synthetic. Khan fires a signal arrow: enemies in area take +10% damage. Modelled as `meleeAttack`, `rangedAttack`, `siegeAttack` `×1.1` targeting `annihilation_condition` class, `excludeId: ['battering-ram']`. Icon: aoe4world tech icon URL. Duration (10s) not modelled. |
+| `ability-relic-garrisoned-dock` | HRE / Order of the Dragon (`hr`, `od`) | **Counter ability** (`counterMax:5, counterStep:0.05, direction:decrease`). Each relic garrisoned in a dock gives naval military ×1/(1+N×0.05) attack cycle. Galley override: `counterStep:0.03`. |
+| `ability-lord-of-lancaster-inspiration` | English (`en`) | **Counter ability** (synthetic, `counterMax:4, counterStep:0.05, direction:increase, label:'HP'`). Each stack gives all units ×(1+N×0.05) HP (additive stacking). |
 | Kipchak Archer bleed | Kipchak Archer (`gol`) | No ability — hardcoded in `getChargeBonus` (`Sandbox.tsx`): base +12 for `baseId === 'kipchak-archer'`; +5.2 added when `incendiary-arrows` is active (4th param `activeTechnologies: Set<string>` passed at all 4 call sites). Formula label shows "Bleed" (detected via `kipchak_archer` class in `combat.ts`). UnitCard label uses `chargeBonusLabel` field on the bonus object (set in Sandbox.tsx alignment phase, defaults to `'Charge'`). |
+| `ability-house-unified` | Earl's Guard + Demilancer (`hl`) | Synthetic. `active:'always'`, `minAge:3`. **Counter ability** (`counterMax:6, counterStep:1, counterDirection:'additive', label:'damage'`). Each stack (= 1 Keep) adds +1 melee attack to `earls-guard` and `demilancer` (via `applyTechnologyEffects` `change` effect), AND +1 dagger throw damage (via 7th param `abilityCounters` passed to `getChargeBonus`; `castleBonus = abilityCounters.get('ability-house-unified') ?? 0` added to `daggerBase` before burst multiplication). Tooltip shows `+N damage (N stacks)`. |
+| `ability-dagger-throw` | Earl's Guard (`hl`) | Synthetic. `active:'always'`, `minAge:3`. First-hit bonus damage (Kipchak bleed pattern): age 3 → +16, age 4 → +22 base. **Ranged damage** — does NOT scale with melee attack techs. Scales with: `throwing-dagger-drills` (+2/dagger), `ability-house-unified` castle stacks (+1/stack), and ranged attack techs (`steeled-arrow`, `balanced-projectiles`, `platecutter-point`, +1 each) via 8th param `modifiedRangedAttack` passed to `getChargeBonus` (= `modifiedStats.rangedAttack`, initialised to 0 for melee units). Those 3 techs are patched with `after` to append a `rangedAttack change +1 select.id:['earls-guard']` effect. Label "Dagger" set via `chargeBonusLabel` in Sandbox.tsx alignment phase; detected via `lancaster_champion` class in `combat.ts` formula. Dummy effect `property:'unknown', select.id:['earls-guard']` keeps ability visible in selector. `throwing-dagger-drills` tech: +2 damage per dagger + burst ×2 — `getChargeBonus` returns `daggerBase × burstCount` (total). Display split via `chargeBonusBurst`: `getChargeBonusBurst()` helper returns burst count, injected into all 4 modifiedVariation blocks + aligned bonus objects. UnitCard shows `+24×2 Dagger`, formula shows `Dagger(24×2)`. Tech patch uses `meleeAttack value:0` dummy to pass `isCombatTechnology`. `chargeArmorType:'ranged'` injected into all 4 modifiedVariation blocks (via `baseId/id === 'earls-guard'`) → `computeEffectiveDamage` separates dagger from primary weapon: dagger uses ranged armor + ranged resistance, primary weapon (War Hammer) uses melee armor as normal. |
 | `stone-armies` tech | Rus Tribute (`gol`) | Age-4 variation (`rus-tribute-4`) removed via `patches/units.ts` `after` — its stats are instead granted by this tech: `hitpoints +30`, `meleeAttack +4`, `meleeAttack bonus +5 vs cavalry` (3→8), `meleeArmor +1`, `rangedArmor +1`. Also reduces torguud stone cost ×0.8 (`stoneCostReduction`). Tech class `age_up_upgrade` → shows in AGE row of TechnologySelector. |
 
 Charge weapon detection: secondary melee weapon with strictly higher damage than primary → used as `chargeWeapon` on hit 1.
@@ -217,11 +222,34 @@ Charge weapon detection: secondary melee weapon with strictly higher damage than
 - To add a new upgrade chain: append an ordered array of ability IDs to `ABILITY_UPGRADE_GROUPS` in `useUnitSlot.ts`. No other changes needed.
 - Current entries include: Chinese dynasties, Network of Castles/Citadels, Khan War Cry tiers (`ability-khan-warcry-2/3/4`).
 
+### Counter ability system (useUnitSlot.ts + AbilitySelector.tsx)
+Abilities with `counterMax?: number` on their definition render as a counter widget instead of a toggle button.
+
+**Data fields** (on `Technology` / `Ability`):
+- `counterMax: number` — max stacks (e.g. 5 for relics, 4 for Lancaster)
+- `counterStep: number` — default per-stack increment (e.g. 0.05)
+- `unitCounterStep?: Record<string, number>` — per-unit override (keyed by unit `baseId`)
+- `counterDirection?: 'decrease' | 'increase' | 'additive'` — `'decrease'` (default): `1/(1+N×step)` (e.g. attack speed); `'increase'`: `1+N×step` (e.g. HP); `'additive'`: `N×step` flat value (use with `effect:'change'`, e.g. +N melee attack)
+- `counterTooltipLabel?: string` — label in tooltip (e.g. `'HP'`; defaults to `'attack cycle'`)
+
+**State** (`useUnitSlot`): `abilityCounters: Map<string, number>` + `incrementAbility(id)` / `decrementAbility(id)`. At count 0 the ability is absent from `activeAbilities` (inactive). Counter abilities are excluded from `getActiveAbilityVariations` and applied separately in `modifiedStats` with a synthetic variation whose value is the computed effective multiplier.
+
+**UI** (`AbilitySelector`): icon with amber border + count badge when active; `[−] N/max [+]` row below. Props: `abilityCounters`, `onIncrement`, `onDecrement`, `unitId` (for per-unit step in tooltip).
+
+**To add a new counter ability:**
+1. If existing: patch with `update: { counterMax, counterStep, counterDirection?, counterTooltipLabel? }` in `patches/abilities.ts`.
+2. If synthetic: create a `createXxx()` function in `patches/abilities.ts` with those fields + a no-op `effects[0].value: 1.0`, register in `applyAbilityPatches`.
+3. No changes needed in `useUnitSlot`, `AbilitySelector`, or `Sandbox`.
+
+**Current counter abilities:**
+- `ability-relic-garrisoned-dock` (HRE/OD) — `counterMax:5, counterStep:0.05, direction:decrease`, galley override `0.03`
+- `ability-lord-of-lancaster-inspiration` (English) — `counterMax:4, counterStep:0.05, direction:increase, label:'HP'`
+
 ### Ability display row grouping (AbilitySelector.tsx)
 `ABILITY_ROW_GROUPS: readonly { label: string; ids: readonly string[] }[]` — exported from `patches/abilities.ts`. Each entry reserves a dedicated visual row in the ability grid with a short label (shown as `LABEL:` on the left). Abilities not listed in any group share the default `ABI:` row (always rendered first). Rows render in array order after the default row.
 - `AbilitySelector` splits the incoming `abilities` array into default + named rows, then renders each as a `renderRow` call (same 4-column age grid per row, label on left matching `TechnologySelector` style).
 - To add a new reserved row: append `{ label: 'XYZ', ids: ['ability-id-1', ...] }` to `ABILITY_ROW_GROUPS` in `patches/abilities.ts`. No other changes needed.
-- Current entries: `{ label: 'WC', ids: ['ability-khan-warcry-2', 'ability-khan-warcry-3', 'ability-khan-warcry-4'] }`.
+- Current entries: `{ label: 'WC', ids: ['ability-khan-warcry-2', 'ability-khan-warcry-3', 'ability-khan-warcry-4'] }`, `{ label: 'CTR', ids: ['ability-house-unified', 'ability-lord-of-lancaster-inspiration'] }`.
 
 ### Weapon-swap unit system (useUnitSlot.ts)
 Generalised for desert-raider and manjaniq via `WEAPON_SWAP_GROUPS` and `WEAPON_SWAP_DEFAULTS`:
@@ -347,7 +375,9 @@ after: (tech) => ({
   - **`hitpoints`**: **additive stacking on pre-Phase-2 base HP**. Each multiplier contributes `(value - 1)` to a running delta, applied once: `HP_base × (1 + Σ(value - 1))`. e.g. ×1.25 + ×1.10 = HP × 1.35 (not ×1.375).
   - **All other stats**: multiplicative chaining (`stat *= value`).
 - **Note:** `moveSpeed` previously had a special case where `"change"` was treated as a percentage (`stat *= 1 + value/100`). This is now commented out. Two raw techs (`do-maru-armor`, `kabura-ya-whistling-arrow`) use `change: 10` and are now broken (+10 t/s instead of +10%) — patch them to `multiply: 1.1` when needed.
-- Special properties (`maxRange`, `attackSpeed`, `rangedResistance`, `meleeResistance`, `healingRate`, `burst`, `costReduction`, `stoneCostReduction`, `chargeMultiplier`) are handled in Phase 3 with their own additive/multiplicative logic.
+- Special properties (`maxRange`, `attackSpeed`, `rangedResistance`, `meleeResistance`, `healingRate`, `burst`, `costReduction`, `stoneCostReduction`, `chargeMultiplier`, `bonusDamageMultiplier`) are handled in Phase 3 with their own additive/multiplicative logic.
+- `bonusDamageMultiplier` → multiplies **all existing `bonusDamage` entries** by a factor, applied as a single pass at the very end of `applyTechnologyEffects` (after bonus additions). Uses a local `bonusDmgMultiplier` variable — not stored in `UnitStats` — so it never double-applies across successive calls. Patch with `property: 'bonusDamageMultiplier', effect: 'multiply', value: 1.2, type: 'passive'`.
+- `armorPenetration` → reduces effective enemy armor by N on each hit (`Math.max(0, armor - penetration)`). Applies inside the `if (weapon.type !== "siege")` block in `combat.ts` after armor type is resolved — so siege weapons ignore it. Pipeline: `UnitStats.armorPenetration` (init 0 in `useUnitSlot`) → Phase 3 (`change` additive) → `modifiedStats` → injected into `modifiedVariation` in `Sandbox.tsx` → `CombatEntity.armorPenetration` → `computeMetrics`. Patch with `property: 'armorPenetration', effect: 'change', value: 1, type: 'passive'`. Current use: `billmen` (spearman, Lord of Lancaster) → −1 enemy armor.
 - `stoneCostReduction` → `UnitStats.stoneCostMultiplier` — stone-only cost multiplier, applied in Sandbox.tsx on top of `costMultiplier` for the stone resource only. Use when a tech reduces only stone (e.g. `stone-armies` for torguud: 100 → 80 stone, food stays at 75). Generic `costReduction` would incorrectly reduce all resources.
 - `chargeMultiplier` → `UnitStats.chargeMultiplier` — first-hit charge bonus = `primaryWeapon.damage × chargeMultiplier`. Requires `charge-attack` to be active. Passed as 5th arg to `getChargeBonus(unitData, abilities, age, techs, chargeMultiplier?)` in Sandbox.tsx. Knight/ghulam/firelancer/cataphract/kipchak take priority via early return — `chargeMultiplier` only applies to other melee units. Additive stacking (`change`). Example: `burgrave-palace-age-up` → `melee_infantry` × 0.5 (50% of primary weapon damage).
 
