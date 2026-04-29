@@ -9,7 +9,16 @@
       "Bash(node -e \"const d = require\\('./src/data/all-unified.json'\\); const u = d.find\\(u => u.id === 'wynguard-footman'\\); console.log\\(JSON.stringify\\(u?.variations?.map\\(v => \\({age: v.age, costs: v.costs}\\)\\), null, 2\\)\\)\")",
       "Bash(node -e \"const d = require\\('./src/data/all-unified.json'\\); const arr = Array.isArray\\(d\\) ? d : Object.values\\(d\\).flat\\(\\); const u = arr.find\\(u => u.id === 'wynguard-footman'\\); console.log\\(JSON.stringify\\(u?.variations?.map\\(v => \\({age: v.age, costs: v.costs}\\)\\), null, 2\\)\\)\")",
       "Bash(node -e \"const d = require\\('./src/data/all-optimized_tec.json'\\); const t = d.data.find\\(t => t.id === 'armor-clad'\\); console.log\\(JSON.stringify\\(t?.effects, null, 2\\)\\)\")",
-      "Bash(node -e \"const d = require\\('./src/data/all-optimized_tec.json'\\); const t = d.data.find\\(t => t.id === 'armor-clad'\\); console.log\\(JSON.stringify\\(t?.variations?.[0]?.effects, null, 2\\)\\)\")"
+      "Bash(node -e \"const d = require\\('./src/data/all-optimized_tec.json'\\); const t = d.data.find\\(t => t.id === 'armor-clad'\\); console.log\\(JSON.stringify\\(t?.variations?.[0]?.effects, null, 2\\)\\)\")",
+      "Bash(python3 -c ' *)",
+      "Bash(grep -n \"^];\\\\|^  },\\\\s*$\" \"d:/Yanis/Desktop/projet_code/aoe4-matchup-master1/src/data/patches/units.ts\")",
+      "Bash(grep -n \"^export const abilityPatches\\\\|^];\\\\s*$\\\\|abilityPatches: AbilityPatch\" \"d:/Yanis/Desktop/projet_code/aoe4-matchup-master1/src/data/patches/abilities.ts\")",
+      "Bash(node -e \"const fs=require\\('fs'\\);const raw=fs.readFileSync\\('src/data/all-unified.json','utf8'\\);const d=JSON.parse\\(raw\\);console.log\\(typeof d, Array.isArray\\(d\\), Object.keys\\(d\\).slice\\(0,5\\)\\);\")",
+      "Bash(node -e \"const fs=require\\('fs'\\);const d=JSON.parse\\(fs.readFileSync\\('src/data/all-unified.json','utf8'\\)\\);const units=d.data;console.log\\('total:',units.length\\);const rk=units.find\\(u=>u.id==='royal-knight'\\);const jk=units.find\\(u=>u.id==='jeanne-darc-knight'\\);console.log\\('rk classes:',JSON.stringify\\(rk&&rk.classes\\)\\);console.log\\('jk classes:',JSON.stringify\\(jk&&jk.classes\\)\\);console.log\\('rk civs:',JSON.stringify\\(rk&&rk.civs\\)\\);console.log\\('jk civs:',JSON.stringify\\(jk&&jk.civs\\)\\);\")",
+      "Bash(curl -s http://localhost:8080)",
+      "Bash(python -c ' *)",
+      "Bash(grep -oE '[a-zA-Z_$][a-zA-Z0-9_$]*[Aa]lly[a-zA-Z0-9_$]*|[a-zA-Z_$][a-zA-Z0-9_$]*[Ee]nemy[a-zA-Z0-9_$]*' src/pages/Sandbox.tsx)",
+      "Bash(grep -oE '\\\\bally[A-Z][a-zA-Z0-9_$]*|\\\\benemy[A-Z][a-zA-Z0-9_$]*' src/pages/Sandbox.tsx)"
     ]
   },
   "hooks": {
