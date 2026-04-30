@@ -55,7 +55,7 @@ UnifiedUnit → variations: UnifiedVariation[]
 CombatEntity (derived at compute time in combat.ts):
   hitpoints, costs, classes[], weapons[], activeAbilities[]
   armor:{melee,ranged}, moveSpeed, continuousMovement, selfDestructs
-  secondaryWeapons[], chargeArmorType, armorPenetration, healingRate
+  secondaryWeapons[], chargeArmorType, armorPenetration, healingRate, opponentAttackSpeedDebuff
   firstHitBlocked   ← injected in Sandbox.tsx when ability-deflective-armor active
   postChargeMeleeBonus  ← subtracted from hit 1 baseDamage when chargeBonus > 0 (royal-knight/jeanne-darc-knight post-charge buff)
 ```
@@ -73,7 +73,7 @@ Key utilities (unified-units.ts): `getUnitVariation`, `getMaxAge`, `getPrimaryWe
 4. + Modifier bonuses (vs unit classes)
 5. + Charge bonus (hit 1 only, if no charge weapon)
 6. − Armor (melee/ranged; siege/gunpowder ignore ranged armor)
-7. × (1 − resistance%)
+7. × (1 − resistance%) — lookup by `weapon.type`; if attacker has class `gunpowder`, also applies `{ type: 'gunpowder' }` resistance (multiplicative)
 8. × versusDebuff multiplier
 
 ### Entry points
@@ -117,7 +117,8 @@ after: (tech) => ({ ...tech, effects: [], variations: tech.variations.map(v => (
 
 ### Special properties (Phase 3 in applyTechnologyEffects)
 `maxRange`, `attackSpeed`, `rangedResistance`, `meleeResistance`, `healingRate`, `burst`,
-`costReduction`, `stoneCostReduction`, `chargeMultiplier`, `bonusDamageMultiplier`, `armorPenetration`
+`costReduction`, `stoneCostReduction`, `foodCostReduction`, `goldCostReduction`, `chargeMultiplier`, `chargeChange`, `bonusDamageMultiplier`, `armorPenetration`,
+`rangedResistance`, `meleeResistance`, `siegeResistance`, `opponentAttackSpeedDebuff`
 
 ### Modifier target class encoding
 Nested arrays `[['light','melee','infantry']]` match via `expandedTokens`. Tokens after `"non"` in compound class negated. Logic duplicated in **4 places — keep in sync**:
@@ -143,7 +144,7 @@ Two `useUnitSlot` hooks (`civ1` + `civ2`). State: `isVersus`, `atEqualCost`, `al
 `modifiedVariation1NoTimer`, `modifiedVariation2NoTimer`, `modifiedUnit1NoTimer`, `modifiedUnit2NoTimer`
 → Same structure as originals but with effects that have a `duration` field stripped out (effect-level filtering, not ability-level).
 
-`getChargeBonus(unitData, abilities, age, techs, chargeMultiplier?, abilityCounters?, modifiedRangedAttack?)`
+`getChargeBonus(unitData, abilities, age, techs, chargeMultiplier?, abilityCounters?, modifiedRangedAttack?, chargeChange?)`
 → age-specific per-unit charge overrides live here, **not** in ability data.
 
 ---
@@ -157,13 +158,18 @@ Two `useUnitSlot` hooks (`civ1` + `civ2`). State: `isVersus`, `atEqualCost`, `al
 | `TECH_ABILITY_DEPENDENCIES` | Tech requires an ability |
 | `ABILITY_TECH_DEPENDENCIES` | Ability requires a tech |
 | `CIV_TECH_EXCLUSIVE_GROUPS` | Civ-specific mutually exclusive techs |
-| `DEFAULT_ACTIVE_TECHS` | Auto-activated techs on unit load |
+| `DEFAULT_ACTIVE_TECHS` | Auto-activated techs on unit load (keyed by civ) |
+| `LOCKED_UNIT_TECHS` | Auto-activated + locked (non-clickable) techs per unit ID |
 | `WEAPON_SWAP_GROUPS` / `WEAPON_SWAP_DEFAULTS` | Dual-weapon units |
 | `EXCLUDED_UNIT_IDS` | Globally hidden units |
 | `BASE_MODIFYING_ABILITY_IDS` | Applied in 3rd pass (multiplicative HP) |
 | `ABILITY_ROW_GROUPS` (abilities.ts) | Reserved visual rows in AbilitySelector |
 
 `useUnitSlot` also returns `modifiedStatsNoTimer` (stats with duration-tagged effects stripped) and `activeTimedDuration` (minimum `duration` across all effects of active abilities, or undefined). Duration is read directly from effect objects in `patches/abilities.ts` — no hardcoded map.
+
+Counter ability effects support `counterStepScale?: number` (on `TechnologyEffect`): final value = `count × step × counterStepScale`. Defaults to 1. Use when two effects in the same counter ability need different per-stack increments (e.g. +5 HP and +1 ATK per kill).
+
+`counterHideMax?: boolean` (on `Technology`/`Ability`): if true, hides the `/max` from the counter display — shows `count` only. Use for effectively-unbounded counters (e.g. kill-tracking abilities with a high sentinel max like 200 or 999).
 
 ---
 

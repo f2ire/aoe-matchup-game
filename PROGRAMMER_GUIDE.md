@@ -367,6 +367,44 @@ const allWithSynthetic = [...allTechs, createMyTech()];
 
 ---
 
+## 4b. Forcer une tech active + verrouillée pour une unité `useUnitSlot.ts` `DIY`
+
+> Cas : une tech représente un bonus passif permanent d'une unité (ex. `teutonic-order` sur `teutonic-knight`).
+> Elle doit s'activer automatiquement et être grisée non-cliquable dans le sélecteur.
+
+**Une seule étape** — ajouter l'entrée dans `LOCKED_UNIT_TECHS` (`useUnitSlot.ts`) :
+
+```ts
+const LOCKED_UNIT_TECHS: Record<string, string[]> = {
+  'teutonic-knight': ['teutonic-order'],
+  // 'autre-unit-id': ['tech-id-1', 'tech-id-2'],
+};
+```
+
+La tech sera :
+- activée automatiquement à chaque chargement de l'unité
+- ajoutée à `lockedTechnologies` → grisée et non-cliquable dans `TechnologySelector`
+
+### Cas analogue — Ability toujours active pour une unité spécifique `DIY`
+
+Utiliser `active: 'always'` + `activeForIds` dans le patch de l'ability :
+
+```ts
+{
+  id: 'ability-katana-bannerman-aura',
+  update: { active: 'always' },
+  after: (ability) => ({
+    ...ability,
+    activeForIds: ['katana-bannerman'],   // auto-activation limitée à cette unité
+    variations: ability.variations.map(v => ({ ...v, active: 'always' }))
+  })
+}
+```
+
+> **Différence clé** : `LOCKED_UNIT_TECHS` verrouille (non-cliquable). `activeForIds` auto-active sans verrouiller.
+
+---
+
 ## 5. Ajouter une arme secondaire `units.ts`
 
 ### Prompt Claude →
