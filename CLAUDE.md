@@ -55,7 +55,9 @@ UnifiedUnit → variations: UnifiedVariation[]
 CombatEntity (derived at compute time in combat.ts):
   hitpoints, costs, classes[], weapons[], activeAbilities[]
   armor:{melee,ranged}, moveSpeed, continuousMovement, selfDestructs
-  secondaryWeapons[], chargeArmorType, armorPenetration, healingRate, opponentAttackSpeedDebuff
+  secondaryWeapons[], chargeArmorType, armorPenetration, healingRate, healingRatePerSecond, opponentAttackSpeedDebuff
+  healingRate → HP healed per hit (Keshik, Chivalry tech). healingRatePerSecond → HP healed per second (Triumph); negative = self-damage (Militia: −1 HP/s).
+  healingRatePerSecond read from unit data in useUnitSlot baseStats — inherent unit property, not ability/tech only.
   firstHitBlocked   ← injected in Sandbox.tsx when ability-deflective-armor active
   postChargeMeleeBonus  ← subtracted from hit 1 baseDamage when chargeBonus > 0 (royal-knight/jeanne-darc-knight post-charge buff)
 ```
@@ -116,7 +118,7 @@ after: (tech) => ({ ...tech, effects: [], variations: tech.variations.map(v => (
 `getAbilityVariation` concatenates both: put effects at **one level only**.
 
 ### Special properties (Phase 3 in applyTechnologyEffects)
-`maxRange`, `attackSpeed`, `rangedResistance`, `meleeResistance`, `healingRate`, `burst`,
+`maxRange`, `attackSpeed`, `rangedResistance`, `meleeResistance`, `healingRate`, `healingRatePerSecond`, `burst`,
 `costReduction`, `stoneCostReduction`, `foodCostReduction`, `goldCostReduction`, `chargeMultiplier`, `chargeChange`, `bonusDamageMultiplier`, `armorPenetration`,
 `rangedResistance`, `meleeResistance`, `siegeResistance`, `opponentAttackSpeedDebuff`
 
@@ -213,14 +215,5 @@ Counter ability effects support `counterStepScale?: number` (on `TechnologyEffec
 - Don't re-read files already read in this conversation
 - Don't re-search information already found earlier in the conversation
 
-### After every coding request (patch / synthetic / bug / feature)
-Append a row to `token_data.csv`:
-```
-date,requete,tokens,type,clarifs,resultat,avis_pe
-```
-- `tokens` : precise integer 
-- `clarifs` : nb of questions asked before coding
-- `resultat` : ok | minor | major
-- `avis_pe` : one short sentence on prompt quality
 
 *For ability-specific values, full system descriptions, unit corrections → see `REFERENCE.md`*

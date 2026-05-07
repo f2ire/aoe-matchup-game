@@ -1,3 +1,7 @@
 Byzantines => Vils ability per age : Akritoi Defense
 Golden horde => Ram ability :  Beachhead
-HRE => Black rider ability : Caracole. Ships AS bonus per relics
+HRE => Black rider ability : Caracole.
+KT : Fanaticism
+RUS : Militia hp loss. Strelsty manage melee dmg. Serpentine powder.
+Dans sandbox: essayer de clear le côté charge. Le truc hre un peu bizzare.
+Duration stuff : Pour les durations en s pour les dégats se base sur le plus grand entier visible x = temps ability (x%AS = 0)
