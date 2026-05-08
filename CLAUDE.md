@@ -58,6 +58,10 @@ CombatEntity (derived at compute time in combat.ts):
   secondaryWeapons[], chargeArmorType, armorPenetration, healingRate, healingRatePerSecond, opponentAttackSpeedDebuff
   healingRate → HP healed per hit (Keshik, Chivalry tech). healingRatePerSecond → HP healed per second (Triumph); negative = self-damage (Militia: −1 HP/s).
   healingRatePerSecond read from unit data in useUnitSlot baseStats — inherent unit property, not ability/tech only.
+  versusOpponentDamageDebuff  ← multiplier on damage dealt BY attackers when this unit is the defender (default 1; e.g. 0.8 = −20%). Set via tech effects (e.g. ruinous-blinding). Stacks multiplicatively.
+  **Two application paths — never mix both on the same effect or it double-applies:**
+  - `select.id` only → `applyTechnologyEffects` sets the stat on the defender; applies to ALL attackers.
+  - `select.class` (with or without `select.id`) → `applyTechnologyEffects` skips it; `getVersusDebuffMultiplier` in combat.ts applies it only when the ATTACKER matches the class. Keep `select.id` for ability-selector visibility but the stat itself is NOT set via modifiedStats.
   firstHitBlocked   ← injected in Sandbox.tsx when ability-deflective-armor active
   postChargeMeleeBonus  ← subtracted from hit 1 baseDamage when chargeBonus > 0 (royal-knight/jeanne-darc-knight post-charge buff)
 ```
@@ -103,6 +107,20 @@ Key utilities (unified-units.ts): `getUnitVariation`, `getMaxAge`, `getPrimaryWe
 - `select.excludeId: ['unit-id']` → excludes specific unit IDs even if class matches
 - `"siegeAttack"` / `"gunpowderAttack"` → stored in separate `siegeAttack` stat (NOT `rangedAttack`). Sandbox.tsx uses `siegeAttack` for `weapon.type === 'siege'` weapons, `rangedAttack` for all other non-melee. Prevents stacking when an ability targets the same class with both properties.
 
+### Adding a civ to an existing tech
+`getTechnologiesForUnit` checks **both** `tech.civs` and `variation.civs` independently — updating only one is a silent no-op:
+```ts
+after: (tech) => ({ ...tech, civs: [...tech.civs, 'mac'], variations: tech.variations.map(v => ({ ...v, civs: [...v.civs, 'mac'] })) })
+```
+Same rule applies to abilities (`ability.civs` + `variation.civs`).
+
+### Adding bonus damage vs a target class
+Use `type: 'bonus'` (NOT `'passive'`) + `target: { class: [...] }`. The `applyTechnologyEffects` bonus-damage block only fires on `effect.type === 'bonus'` — using `'passive'` is a silent no-op:
+```ts
+{ property: 'meleeAttack', select: { id: ['unit-id'] }, effect: 'change', value: 3, type: 'bonus', target: { class: [['infantry']] } }
+```
+`property: 'meleeAttack'` limits the bonus to melee weapons (excluded from ranged via `filterBonusForWeapon`). Use `'rangedAttack'` for ranged-only bonuses.
+
 ### Adding tech effects — canonical patterns
 - Raw effects empty → `update: { effects: [newEffect] }`
 - Raw effects to preserve → `after: (tech) => ({ ...tech, effects: [...tech.effects, newEffect] })`
@@ -120,7 +138,7 @@ after: (tech) => ({ ...tech, effects: [], variations: tech.variations.map(v => (
 ### Special properties (Phase 3 in applyTechnologyEffects)
 `maxRange`, `attackSpeed`, `rangedResistance`, `meleeResistance`, `healingRate`, `healingRatePerSecond`, `burst`,
 `costReduction`, `stoneCostReduction`, `foodCostReduction`, `goldCostReduction`, `chargeMultiplier`, `chargeChange`, `bonusDamageMultiplier`, `armorPenetration`,
-`rangedResistance`, `meleeResistance`, `siegeResistance`, `opponentAttackSpeedDebuff`
+`rangedResistance`, `meleeResistance`, `siegeResistance`, `opponentAttackSpeedDebuff`, `versusOpponentDamageDebuff`
 
 ### Modifier target class encoding
 Nested arrays `[['light','melee','infantry']]` match via `expandedTokens`. Tokens after `"non"` in compound class negated. Logic duplicated in **4 places — keep in sync**:
@@ -171,6 +189,8 @@ Two `useUnitSlot` hooks (`civ1` + `civ2`). State: `isVersus`, `atEqualCost`, `al
 
 Counter ability effects support `counterStepScale?: number` (on `TechnologyEffect`): final value = `count × step × counterStepScale`. Defaults to 1. Use when two effects in the same counter ability need different per-stack increments (e.g. +5 HP and +1 ATK per kill).
 
+`counterSteps?: number[]` (on `Technology`/`Ability`): per-stack increment array. Overrides `counterStep` when present. Formula depends on `counterDirection`: `additive` → `effectiveValue = sum(counterSteps[0..count-1])` (use with `effect:'change'` and negative values); otherwise → `effectiveValue = 1 + sum(...)` (use with `effect:'multiply'`). Values beyond the array length contribute 0 (plateau).
+
 `counterHideMax?: boolean` (on `Technology`/`Ability`): if true, hides the `/max` from the counter display — shows `count` only. Use for effectively-unbounded counters (e.g. kill-tracking abilities with a high sentinel max like 200 or 999).
 
 ---
@@ -180,7 +200,7 @@ Counter ability effects support `counterStepScale?: number` (on `TechnologyEffec
 - All styling: Tailwind only, no CSS modules
 - Special-case unit behavior → `data/patches/` not `combat.ts`
 - `setUnit` always clears active techs/abilities on every unit switch
-- `modifiedStats` clamps `moveSpeed` to max 2.0
+- `modifiedStats` clamps `moveSpeed` to max 2.0; clamps `meleeArmor` and `rangedArmor` to min 0
 - `categorizeUnit`: `jeanne_d_arc` → `'jeanne'`; `worker` → `'other'`; `mercenary_byz` → `'mercenary'` only if `selectedCiv === 'by'`
 - HRE infantry passive: `moveSpeed ×1.1` in modifiedStats (×1.05 age I) — not a tech
 - `EXCLUDED_UNIT_IDS`: add unit IDs here to hide them globally (e.g. clocktower variants)
