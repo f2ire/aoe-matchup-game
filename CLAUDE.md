@@ -64,6 +64,7 @@ CombatEntity (derived at compute time in combat.ts):
   - `select.class` (with or without `select.id`) → `applyTechnologyEffects` skips it; `getVersusDebuffMultiplier` in combat.ts applies it only when the ATTACKER matches the class. Keep `select.id` for ability-selector visibility but the stat itself is NOT set via modifiedStats.
   firstHitBlocked   ← injected in Sandbox.tsx when ability-deflective-armor active
   postChargeMeleeBonus  ← subtracted from hit 1 baseDamage when chargeBonus > 0 (royal-knight/jeanne-darc-knight post-charge buff)
+  chargeModifiers   ← class-specific bonus damage added to the dagger/javelin hit (before ranged armor). Set in Sandbox.tsx 4 blocks. e.g. donso javelin: +X vs cavalry (age-scaled).
 ```
 
 Key utilities (unified-units.ts): `getUnitVariation`, `getMaxAge`, `getPrimaryWeapon`, `getArmorValue`, `getResistanceValue`
@@ -86,6 +87,7 @@ Key utilities (unified-units.ts): `getUnitVariation`, `getMaxAge`, `getPrimaryWe
 - `computeVersus(unitA, unitB, abilitiesA, abilitiesB, chargeA, chargeB, allowKiting, startDistance)`
 - `computeVersusAtEqualCost(...)` — normalizes costs first
 - `VersusResult.winner` = `"draw" | "attacker" | "defender"` — **never a unit ID**
+- `VersusResult.winnerHpRemaining` = discrete model: `winner.hp − computeDamageInTime(loser, winner, chargeBonusLoser, winner.TTK)`. Counts actual hits (first hit with charge, floor((TTK − firstHitSpeed) / attackSpeed) normal hits). NOT `dps × TTK`.
 
 ### New stat full pipeline
 `patches/` → `applyTechnologyEffects` → `modifiedStats` → **ALL 4 modifiedVariation blocks in Sandbox.tsx** → `toCombatEntity` → `computeMetrics`
@@ -155,14 +157,14 @@ Nested arrays `[['light','melee','infantry']]` match via `expandedTokens`. Token
 
 ## SANDBOX — KEY POINTS
 
-Two `useUnitSlot` hooks (`civ1` + `civ2`). State: `isVersus`, `atEqualCost`, `allowKiting`, `startDistance`, `showDurationEffect`. Sandbox is symmetric — naming uses `1`/`2` suffixes (e.g. `selectedCiv1`, `activeAbilities2`), not ally/enemy. `attacker`/`defender` in `combat.ts` are computation roles, not slot identities.
+Two `useUnitSlot` hooks (`civ1` + `civ2`). State: `isVersus`, `atEqualCost`, `allowKiting`, `startDistance`. Sandbox is symmetric — naming uses `1`/`2` suffixes (e.g. `selectedCiv1`, `activeAbilities2`), not ally/enemy. `attacker`/`defender` in `combat.ts` are computation roles, not slot identities.
 
 **4 modifiedVariation blocks — must update ALL when injecting a new stat:**
 `modifiedVariation1`, `modifiedVariation2` (versus) + `modifiedUnit1`, `modifiedUnit2` (equal-cost)
 
-**4 noTimer variation blocks (parallel, built only when `showDurationEffect` is ON and a timed ability is active):**
+**4 noTimer variation blocks (parallel, built whenever a timed ability is active on that side):**
 `modifiedVariation1NoTimer`, `modifiedVariation2NoTimer`, `modifiedUnit1NoTimer`, `modifiedUnit2NoTimer`
-→ Same structure as originals but with effects that have a `duration` field stripped out (effect-level filtering, not ability-level).
+→ Same structure as originals but with effects that have a `duration` field stripped out (effect-level filtering, not ability-level). Duration system is always active — no toggle.
 
 `getChargeBonus(unitData, abilities, age, techs, chargeMultiplier?, abilityCounters?, modifiedRangedAttack?, chargeChange?)`
 → age-specific per-unit charge overrides live here, **not** in ability data.

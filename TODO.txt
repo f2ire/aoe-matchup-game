@@ -8,4 +8,6 @@ Dans les "same value" figght => adapté les counter selon le nombre d'unité (si
 
 label ability : aura
 
+healingrate par attack pendant le kiting.
+
 cascade contact
