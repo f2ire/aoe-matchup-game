@@ -105,6 +105,7 @@ Key utilities (unified-units.ts): `getUnitVariation`, `getMaxAge`, `getPrimaryWe
 - `"change"` → additive: `stat += value`
 - `"multiply"` on `hitpoints` → **additive stacking**: `HP × (1 + Σ(value−1))`
 - `"multiply"` on other stats → multiplicative chaining: `stat *= value`
+- **Exception — Mongol improved pairs**: when both a base tech and its `-improved` counterpart are active, their `multiply` effects on any stat (including `attackSpeed`, `healingRate`) stack **additively**: `stat × (1 + Σ(value−1))`. Implemented in `applyTechnologyEffects` via `activePairBases` + `getPairBaseId`.
 - Effect with no `select` = matches **all** units
 - `select.excludeId: ['unit-id']` → excludes specific unit IDs even if class matches
 - `"siegeAttack"` / `"gunpowderAttack"` → stored in separate `siegeAttack` stat (NOT `rangedAttack`). Sandbox.tsx uses `siegeAttack` for `weapon.type === 'siege'` weapons, `rangedAttack` for all other non-melee. Prevents stacking when an ability targets the same class with both properties.
@@ -203,7 +204,7 @@ Counter ability effects support `counterStepScale?: number` (on `TechnologyEffec
 - Special-case unit behavior → `data/patches/` not `combat.ts`
 - `setUnit` always clears active techs/abilities on every unit switch
 - `modifiedStats` clamps `moveSpeed` to max 2.0; clamps `meleeArmor` and `rangedArmor` to min 0
-- `categorizeUnit`: `jeanne_d_arc` → `'jeanne'`; `worker` → `'other'`; `mercenary_byz` → `'mercenary'` only if `selectedCiv === 'by'`
+- `categorizeUnit`: `jeanne_d_arc` → `'jeanne'`; `worker` → `'other'`; `mercenary_byz` → `'mercenary'` only if `selectedCiv === 'by'`; `khaganate` → `'khaganate'` only if `selectedCiv === 'mo'`
 - HRE infantry passive: `moveSpeed ×1.1` in modifiedStats (×1.05 age I) — not a tech
 - `EXCLUDED_UNIT_IDS`: add unit IDs here to hide them globally (e.g. clocktower variants)
 - `BASE_MODIFYING_ABILITY_IDS`: abilities applied after all others (multiplicative HP, e.g. Clocktower)

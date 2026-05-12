@@ -40,26 +40,33 @@ Je veux...
 
 ## Référence rapide : propriétés d'effet
 
-| `property`           | Unité             | `effect` supportés   | Notes |
-|----------------------|-------------------|----------------------|-------|
-| `hitpoints`          | HP                | `change`, `multiply` | `multiply` = **additif** entre patches : `HP × (1 + Σ(v−1))` |
-| `meleeAttack`        | dégâts mêlée      | `change`, `multiply` | `type:'bonus'` + `target.class` pour bonus vs classe |
-| `rangedAttack`       | dégâts ranged     | `change`, `multiply` | |
-| `siegeAttack`        | dégâts siège      | `change`, `multiply` | Ignore l'armure ranged |
-| `meleeArmor`         | armure mêlée      | `change`             | |
-| `rangedArmor`        | armure ranged     | `change`             | |
-| `attackSpeed`        | cycle d'attaque   | `change`, `multiply` | Plus petit = plus rapide |
-| `moveSpeed`          | vitesse           | `change`, `multiply` | Cap à 2.0 après application |
-| `maxRange`           | portée max        | `change`             | |
-| `burst`              | projectiles/tir   | `change`             | |
-| `costReduction`      | coût (tous)       | `multiply`           | `0.8` = −20% |
-| `stoneCostReduction` | coût pierre seul  | `multiply`           | `0.8` = −20% pierre uniquement |
-| `rangedResistance`   | résistance ranged | `change`             | % de réduction (0–100) |
-| `meleeResistance`    | résistance mêlée  | `change`             | Positif = réduction, négatif = vulnérabilité |
-| `healingRate`        | soin/frappe       | `change`             | HP par frappe reçue |
-| `chargeMultiplier`   | bonus charge      | `change`             | bonus 1er hit = `primaryDmg × value`. Requiert `charge-attack` actif |
-| `armorPenetration`   | pénétration       | `change`             | Réduit armure ennemie de N par frappe |
-| `bonusDamageMultiplier` | bonus dmg (×) | `multiply`           | Multiplie tous les bonus dmg existants de l'unité par N (ex. `3` = ×3). Phase 3 de `applyTechnologyEffects`. |
+| `property`                   | Unité                    | `effect` supportés   | Notes |
+|------------------------------|--------------------------|----------------------|-------|
+| `hitpoints`                  | HP                       | `change`, `multiply` | `multiply` = **additif** entre patches : `HP × (1 + Σ(v−1))` |
+| `meleeAttack`                | dégâts mêlée             | `change`, `multiply` | `type:'bonus'` + `target.class` pour bonus vs classe |
+| `rangedAttack`               | dégâts ranged            | `change`, `multiply` | |
+| `siegeAttack`                | dégâts siège             | `change`, `multiply` | Ignore l'armure ranged |
+| `meleeArmor`                 | armure mêlée             | `change`             | |
+| `rangedArmor`                | armure ranged            | `change`             | |
+| `attackSpeed`                | cycle d'attaque          | `change`, `multiply` | Plus petit = plus rapide |
+| `moveSpeed`                  | vitesse                  | `change`, `multiply` | Cap à 2.0 après application |
+| `maxRange`                   | portée max               | `change`             | |
+| `burst`                      | projectiles/tir          | `change`             | |
+| `costReduction`              | coût (tous)              | `multiply`           | `0.8` = −20% |
+| `stoneCostReduction`         | coût pierre seul         | `multiply`           | `0.8` = −20% pierre uniquement |
+| `foodCostReduction`          | coût nourriture seul     | `multiply`           | `0.8` = −20% nourriture uniquement |
+| `goldCostReduction`          | coût or seul             | `multiply`           | `0.8` = −20% or uniquement |
+| `rangedResistance`           | résistance ranged        | `change`             | % de réduction (0–100) |
+| `meleeResistance`            | résistance mêlée         | `change`             | Positif = réduction, négatif = vulnérabilité |
+| `siegeResistance`            | résistance siège         | `change`             | % de réduction (0–100) |
+| `healingRate`                | soin/frappe              | `change`             | HP soignés par frappe **reçue** (ex. Keshik, Chivalry) |
+| `healingRatePerSecond`       | soin/seconde             | `change`             | HP soignés par seconde (ex. Triumph) ; négatif = auto-dégâts (ex. Militia −1 HP/s) |
+| `chargeMultiplier`           | bonus charge             | `change`             | bonus 1er hit = `primaryDmg × value`. Requiert `charge-attack` actif |
+| `chargeChange`               | bonus charge (additif)   | `change`             | Ajoute N au bonus de charge absolu (avant multiplicateur) |
+| `armorPenetration`           | pénétration              | `change`             | Réduit armure ennemie de N par frappe |
+| `opponentAttackSpeedDebuff`  | debuff vitesse attaque   | `change`             | Réduit le cycle d'attaque de l'adversaire de N% (0–100) |
+| `versusOpponentDamageDebuff` | debuff dégâts reçus      | `multiply`           | Multiplie les dégâts subis par ce défenseur (ex. `0.8` = −20%). Voir CLAUDE.md pour les deux chemins d'application. |
+| `bonusDamageMultiplier`      | bonus dmg (×)            | `multiply`           | Multiplie tous les bonus dmg existants de l'unité par N (ex. `3` = ×3). Phase 3 de `applyTechnologyEffects`. |
 
 **`select`** — filtre les unités ciblées :
 ```ts
