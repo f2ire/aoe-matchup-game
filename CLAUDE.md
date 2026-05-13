@@ -105,7 +105,7 @@ Key utilities (unified-units.ts): `getUnitVariation`, `getMaxAge`, `getPrimaryWe
 - `"change"` → additive: `stat += value`
 - `"multiply"` on `hitpoints` → **additive stacking**: `HP × (1 + Σ(value−1))`
 - `"multiply"` on other stats → multiplicative chaining: `stat *= value`
-- **Exception — Mongol improved pairs**: when both a base tech and its `-improved` counterpart are active, their `multiply` effects on any stat (including `attackSpeed`, `healingRate`) stack **additively**: `stat × (1 + Σ(value−1))`. Implemented in `applyTechnologyEffects` via `activePairBases` + `getPairBaseId`.
+- **Exception — Mongol improved pairs**: when both a base tech and its `-improved` counterpart are active **and `selectedCiv === 'mo'`**, their `multiply` effects on any stat (including `attackSpeed`, `healingRate`) stack **additively**: `stat × (1 + Σ(value−1))`. Implemented in `applyTechnologyEffects` via `activePairBases` + `getPairBaseId`. `selectedCiv` is the 5th parameter of `applyTechnologyEffects` — must be passed at all call sites.
 - Effect with no `select` = matches **all** units
 - `select.excludeId: ['unit-id']` → excludes specific unit IDs even if class matches
 - `"siegeAttack"` / `"gunpowderAttack"` → stored in separate `siegeAttack` stat (NOT `rangedAttack`). Sandbox.tsx uses `siegeAttack` for `weapon.type === 'siege'` weapons, `rangedAttack` for all other non-melee. Prevents stacking when an ability targets the same class with both properties.
