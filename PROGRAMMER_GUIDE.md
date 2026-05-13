@@ -66,6 +66,7 @@ Je veux...
 | `armorPenetration`           | pénétration              | `change`             | Réduit armure ennemie de N par frappe |
 | `opponentAttackSpeedDebuff`  | debuff vitesse attaque   | `change`             | Réduit le cycle d'attaque de l'adversaire de N% (0–100) |
 | `versusOpponentDamageDebuff` | debuff dégâts reçus      | `multiply`           | Multiplie les dégâts subis par ce défenseur (ex. `0.8` = −20%). Voir CLAUDE.md pour les deux chemins d'application. |
+| `opponentHealingRateDebuff`  | bleed / poison           | `change`             | Ajoute N HP/s au DPS de l'attaquant (bypass armure et résistance). Soustrait du `healingRatePerSecond` du défenseur si positif. Ex. `zornhau` (+2), `poisoned-arrows` (+1.85). |
 | `bonusDamageMultiplier`      | bonus dmg (×)            | `multiply`           | Multiplie tous les bonus dmg existants de l'unité par N (ex. `3` = ×3). Phase 3 de `applyTechnologyEffects`. |
 
 **`select`** — filtre les unités ciblées :
@@ -627,7 +628,7 @@ Checklist dans l'ordre :
 2. **`select` correspond à l'unité ?** — Vérifier `id` ou `class` contre les classes réelles de l'unité.
    - Classes composites (`infantry_melee`) → split underscore → `expandedTokens`. Tester avec un `id` explicite pour isoler.
 
-3. **Propriété spéciale ?** — `attackSpeed`, `rangedResistance`, `meleeResistance`, `healingRate`, `costReduction`, `armorPenetration`, etc. → Phase 3 de `applyTechnologyEffects`. Si la propriété n'est pas dans le guard `if`, elle est ignorée silencieusement.
+3. **Propriété spéciale ?** — `attackSpeed`, `rangedResistance`, `meleeResistance`, `healingRate`, `healingRatePerSecond`, `opponentHealingRateDebuff`, `costReduction`, `armorPenetration`, etc. → Phase 3 de `applyTechnologyEffects`. **Deux listes à mettre en sync** dans `unified-technologies.ts` : `combatProperties` (~ligne 95) ET le guard `if (property === ...)` (~ligne 490). Manquer l'une des deux = effet ignoré silencieusement (aucune erreur).
 
 4. **Injecté dans les 4 blocs Sandbox ?** — Tout nouveau stat doit être dans `modifiedVariationAlly`, `modifiedVariationEnemy`, `modifiedUnit1`, `modifiedUnit2`.
 
@@ -706,7 +707,7 @@ modifiedVariation semble correct : [oui|non].
 |----------|-------|----------|
 | Tech toujours visible après hide | `variation.effects` non vidés | `after` pour vider les deux niveaux |
 | Patch non appliqué | Deux entrées avec le même `id` | Supprimer le doublon |
-| Effet ignoré silencieusement | Propriété spéciale absente du `if` Phase 3 | Ajouter dans le guard `if` de `applyTechnologyEffects` |
+| Effet ignoré silencieusement | Propriété spéciale absente du `if` Phase 3 | Ajouter dans `combatProperties` **ET** dans le guard `if` (~ligne 490) de `applyTechnologyEffects` — les deux listes doivent rester en sync |
 | Tech absente du sélecteur | `effects` vides → `isCombatTechnology` = false | Garder un effet `value: 0` |
 | Bonus affiché ×2 sur arme secondaire | `fromWeapon` manquant | Tagger les modifiers à l'init dans `bonusDamage` |
 | `update.effects` sur variation sans effet | `applyTechnologyEffects` ignore `variation.effects` si `tech.effects` non vide | Utiliser `after` |

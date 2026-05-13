@@ -45,7 +45,7 @@ Read this file selectively when working on a specific system. Do not load entire
 | `ability-khan-debuff-arrow` | Golden Horde | Enemies take +10% damage: `meleeAttack`+`rangedAttack`+`siegeAttack` ×1.1 on `annihilation_condition`, `excludeId:['battering-ram']`. |
 | `ability-relic-garrisoned-dock` | HRE/OD | Counter: `counterMax:5, counterStep:0.05, direction:decrease`. Galley override: `0.03`. |
 | `ability-lord-of-lancaster-inspiration` | English | Counter: `counterMax:4, counterStep:0.05, direction:increase, label:'HP'`. |
-| Kipchak Archer bleed | Kipchak Archer | Hardcoded in `getChargeBonus`: base +12. +7.2 added when `incendiary-arrows` active. Label "Bleed". |
+| Kipchak Archer bleed | Kipchak Archer | `opponentHealingRateDebuff: 2` set on all variations in `patches/units.ts` (read from unit data in `baseStats`). No longer a charge bonus — shown as ongoing DPS. `incendiary-arrows` +7.2 charge path removed. |
 | `ability-house-unified` | Earl's Guard + Demilancer | Counter: `counterMax:6, counterStep:1, counterDirection:'additive'`. +1 melee attack + +1 dagger throw per Keep. |
 | `ability-dagger-throw` | Earl's Guard | Age 3 → +16, age 4 → +22 base. Ranged damage (not melee). `chargeArmorType:'ranged'`. Scales with `throwing-dagger-drills` (+2/dagger), castle stacks (+1/stack), ranged attack techs (+1 each). |
 | `ability-house-unified` | Earl's Guard | `chargeBonusBurst` field: `getChargeBonusBurst()` returns burst count. UnitCard shows `+24×2 Dagger`. |

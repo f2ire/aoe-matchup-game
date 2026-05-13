@@ -55,9 +55,10 @@ UnifiedUnit → variations: UnifiedVariation[]
 CombatEntity (derived at compute time in combat.ts):
   hitpoints, costs, classes[], weapons[], activeAbilities[]
   armor:{melee,ranged}, moveSpeed, continuousMovement, selfDestructs
-  secondaryWeapons[], chargeArmorType, armorPenetration, healingRate, healingRatePerSecond, opponentAttackSpeedDebuff
+  secondaryWeapons[], chargeArmorType, armorPenetration, healingRate, healingRatePerSecond, opponentAttackSpeedDebuff, opponentHealingRateDebuff
   healingRate → HP healed per hit (Keshik, Chivalry tech). healingRatePerSecond → HP healed per second (Triumph); negative = self-damage (Militia: −1 HP/s).
   healingRatePerSecond read from unit data in useUnitSlot baseStats — inherent unit property, not ability/tech only.
+  opponentHealingRateDebuff  ← adds to attacker's effective `dps` (shown in UI) and shortens TTK. Applied before the defender-healing block, so it stacks correctly against defender's own healingRatePerSecond. Two sources: (1) tech/ability patch via `effect:'change'`, `property:'opponentHealingRateDebuff'`; (2) unit data (read directly in `baseStats` like `healingRatePerSecond`) — set on variations in `patches/units.ts`.
   versusOpponentDamageDebuff  ← multiplier on damage dealt BY attackers when this unit is the defender (default 1; e.g. 0.8 = −20%). Set via tech effects (e.g. ruinous-blinding). Stacks multiplicatively.
   **Two application paths — never mix both on the same effect or it double-applies:**
   - `select.id` only → `applyTechnologyEffects` sets the stat on the defender; applies to ALL attackers.
@@ -141,7 +142,11 @@ after: (tech) => ({ ...tech, effects: [], variations: tech.variations.map(v => (
 ### Special properties (Phase 3 in applyTechnologyEffects)
 `maxRange`, `attackSpeed`, `rangedResistance`, `meleeResistance`, `healingRate`, `healingRatePerSecond`, `burst`,
 `costReduction`, `stoneCostReduction`, `foodCostReduction`, `goldCostReduction`, `chargeMultiplier`, `chargeChange`, `bonusDamageMultiplier`, `armorPenetration`,
-`rangedResistance`, `meleeResistance`, `siegeResistance`, `opponentAttackSpeedDebuff`, `versusOpponentDamageDebuff`
+`rangedResistance`, `meleeResistance`, `siegeResistance`, `opponentAttackSpeedDebuff`, `versusOpponentDamageDebuff`, `opponentHealingRateDebuff`
+
+**CRITICAL — two lists must stay in sync when adding a new special property:**
+1. `combatProperties` array (line ~95) — gates which effect properties are processed at all
+2. The long `if (property === ...)` condition (line ~490) — routes the effect into `specialEffects` for Phase 3. Missing from this list = silently dropped (no error, no effect).
 
 ### Modifier target class encoding
 Nested arrays `[['light','melee','infantry']]` match via `expandedTokens`. Tokens after `"non"` in compound class negated. Logic duplicated in **4 places — keep in sync**:
