@@ -215,7 +215,7 @@ Knight class → `charge-attack` auto-activates, uses knight-tier bonus. `abilit
 
 ### rangedResistance / meleeResistance
 `UnitStats.rangedResistance` (% 0–100): initialized from `getResistanceValue(data, 'ranged')`. Ability/tech can add via `change: N`. All 4 modified entity objects in Sandbox.tsx override `resistance` array.
-`UnitStats.meleeResistance` (signed): positive = reduction, negative = vulnerability (amplifies damage). Display: positive → neutral underline; negative → orange + "Melee Vuln." label in UnitCard.
+`UnitStats.meleeResistance` (signed): positive = reduction, negative = vulnerability (amplifies damage). Display: positive → neutral underline; negative → orange value with tooltip on the Melee Armor row.
 
 ### Mercenary subcategories
 `getMercenarySubCategory` groups as Melee Infantry / Ranged Infantry / Melee Cavalry / Ranged Cavalry / Siege via `MERCENARY_SUB_ORDER`. Italic sub-labels, no badge.
