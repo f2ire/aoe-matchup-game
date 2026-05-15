@@ -140,9 +140,11 @@ after: (tech) => ({ ...tech, effects: [], variations: tech.variations.map(v => (
 `getAbilityVariation` concatenates both: put effects at **one level only**.
 
 ### Special properties (Phase 3 in applyTechnologyEffects)
-`maxRange`, `attackSpeed`, `rangedResistance`, `meleeResistance`, `healingRate`, `healingRatePerSecond`, `burst`,
+`maxRange`, `attackSpeed`, `rangedResistance`, `meleeResistance`, `healingRate`, `healingRatePerSecond`, `burst`, `burstDecay`,
 `costReduction`, `stoneCostReduction`, `foodCostReduction`, `goldCostReduction`, `chargeMultiplier`, `chargeChange`, `bonusDamageMultiplier`, `armorPenetration`,
 `rangedResistance`, `meleeResistance`, `siegeResistance`, `opponentAttackSpeedDebuff`, `versusOpponentDamageDebuff`, `opponentHealingRateDebuff`
+
+`burstDecay` — secondary bolt damage fraction (no bonus damage). `effect:'change', value:0.4` sets it. In combat.ts: bolt 1 = full damage; bolt 2+ = `effectiveBaseDamage × decay − armor`, same debuff/resistance, clamped to 1. Stored as `weapon.burst.decay` (set via Sandbox.tsx burst assembly) and `modifiedStats.burstDecay` (UnitStats).
 
 **CRITICAL — two lists must stay in sync when adding a new special property:**
 1. `combatProperties` array (line ~95) — gates which effect properties are processed at all

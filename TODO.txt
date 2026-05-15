@@ -8,6 +8,8 @@ Mongol : Add rus monk buff ?
 Pb entre allow kitting & at equal cost
 
 
+HP remaining is calculed with DPS. Make it more precise (calcul : TTK winer / ATS (on prend la base) * degats effectif)
+
 Dans sandbox: essayer de clear le côté charge. Le truc hre un peu bizzare.
 Duration stuff : Pour les durations en s pour les dégats se base sur le plus grand entier visible x = temps ability (x%AS = 0)
 Dans les "same value" figght => adapté les counter selon le nombre d'unité (si unit counter). La duration n''est également pris en compte dans le same value => to correct
