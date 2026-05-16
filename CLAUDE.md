@@ -56,13 +56,14 @@ CombatEntity (derived at compute time in combat.ts):
   hitpoints, costs, classes[], weapons[], activeAbilities[]
   armor:{melee,ranged}, moveSpeed, continuousMovement, selfDestructs
   secondaryWeapons[], chargeArmorType, armorPenetration, healingRate, healingRatePerSecond, opponentAttackSpeedDebuff, opponentHealingRateDebuff
-  healingRate → HP healed per hit (Keshik, Chivalry tech). healingRatePerSecond → HP healed per second (Triumph); negative = self-damage (Militia: −1 HP/s).
-  healingRatePerSecond read from unit data in useUnitSlot baseStats — inherent unit property, not ability/tech only.
+  healingRate → HP healed per hit (Keshik, Chivalry tech, Ikko-ikki Monk). healingRatePerSecond → HP healed per second (Triumph); negative = self-damage (Militia: −1 HP/s).
+  healingRate and healingRatePerSecond both read from unit data in useUnitSlot baseStats — inherent unit properties, not ability/tech only.
   opponentHealingRateDebuff  ← adds to attacker's effective `dps` (shown in UI) and shortens TTK. Applied before the defender-healing block, so it stacks correctly against defender's own healingRatePerSecond. Two sources: (1) tech/ability patch via `effect:'change'`, `property:'opponentHealingRateDebuff'`; (2) unit data (read directly in `baseStats` like `healingRatePerSecond`) — set on variations in `patches/units.ts`.
   versusOpponentDamageDebuff  ← multiplier on damage dealt BY attackers when this unit is the defender (default 1; e.g. 0.8 = −20%). Set via tech effects (e.g. ruinous-blinding). Stacks multiplicatively.
   **Two application paths — never mix both on the same effect or it double-applies:**
   - `select.id` only → `applyTechnologyEffects` sets the stat on the defender; applies to ALL attackers.
   - `select.class` (with or without `select.id`) → `applyTechnologyEffects` skips it; `getVersusDebuffMultiplier` in combat.ts applies it only when the ATTACKER matches the class. Keep `select.id` for ability-selector visibility but the stat itself is NOT set via modifiedStats.
+  maxHpBonusFraction  ← flat bonus damage per hit = fraction × defender.hitpoints, bypasses armor/resistance. Set via patches/units.ts on variations (e.g. kanabo-samurai: 0.06). Read in baseStats like healingRatePerSecond — NOT a tech/ability effect property.
   firstHitBlocked   ← injected in Sandbox.tsx when ability-deflective-armor active
   postChargeMeleeBonus  ← subtracted from hit 1 baseDamage when chargeBonus > 0 (royal-knight/jeanne-darc-knight post-charge buff)
   chargeModifiers   ← class-specific bonus damage added to the dagger/javelin hit (before ranged armor). Set in Sandbox.tsx 4 blocks. e.g. donso javelin: +X vs cavalry (age-scaled).
@@ -88,7 +89,7 @@ Key utilities (unified-units.ts): `getUnitVariation`, `getMaxAge`, `getPrimaryWe
 - `computeVersus(unitA, unitB, abilitiesA, abilitiesB, chargeA, chargeB, allowKiting, startDistance)`
 - `computeVersusAtEqualCost(...)` — normalizes costs first
 - `VersusResult.winner` = `"draw" | "attacker" | "defender"` — **never a unit ID**
-- `VersusResult.winnerHpRemaining` = discrete model: `winner.hp − computeDamageInTime(loser, winner, chargeBonusLoser, winner.TTK)`. Counts actual hits (first hit with charge, floor((TTK − firstHitSpeed) / attackSpeed) normal hits). NOT `dps × TTK`.
+- `VersusResult.winnerHpRemaining` = discrete model: `clamp(winner.hp − computeDamageInTime(loser, winner, chargeBonusLoser, winner.TTK) + healingDuringFight, 0, winner.hp)`. Healing = `hitsToKill × healingRate + TTK × max(0, healingRatePerSecond)`. Clamped to [0, maxHp] — healing can never push HP above max. Counts actual hits (first hit with charge, floor((TTK − firstHitSpeed) / attackSpeed) normal hits). NOT `dps × TTK`.
 
 ### New stat full pipeline
 `patches/` → `applyTechnologyEffects` → `modifiedStats` → **ALL 4 modifiedVariation blocks in Sandbox.tsx** → `toCombatEntity` → `computeMetrics`
@@ -185,8 +186,13 @@ Two `useUnitSlot` hooks (`civ1` + `civ2`). State: `isVersus`, `atEqualCost`, `al
 |---|---|
 | `ABILITY_UPGRADE_GROUPS` | Mutually exclusive ability tiers |
 | `ABILITY_DEPENDENCIES` | Ability requires another ability |
+| `ABILITY_SUPPRESSIONS` | When suppressor is active, suppressed ability's effects are excluded from `applyTechnologyEffects` (effects still computed, just filtered out) |
+| `abilityAbilityInteractions` | (`patches/abilities.ts`) — like `techAbilityInteractions` but ability+ability: fires when both `requiredAbility1` and `requiredAbility2` are active. `apply` sets stats absolutely (e.g. override `attackSpeed`). Applied at both modifiedStats and modifiedStatsNoTimer call sites. |
+| `TECH_TECH_DEPENDENCIES` | Tech visibility gated on another tech being active, for specific unit IDs. Deactivates dependent techs in cascade when required tech is turned off. Full upgrade also applies it: if required tech is selected, best available tier of dependent techs is added. Module-level array in `useUnitSlot.ts`. |
 | `TECH_ABILITY_DEPENDENCIES` | Tech requires an ability |
 | `ABILITY_TECH_DEPENDENCIES` | Ability requires a tech |
+| `TECH_ABILITY_LEVEL_DEPENDENCIES` | Tech locked until ability counter reaches `minLevel` (e.g. Hojo Estate level gates) |
+| `ABILITY_LEVEL_DEPENDENCIES` | Ability locked until another ability counter reaches `minLevel`; supports `civs[]` filter (e.g. deflective-armor gated to sen lvl 3) |
 | `CIV_TECH_EXCLUSIVE_GROUPS` | Civ-specific mutually exclusive techs |
 | `DEFAULT_ACTIVE_TECHS` | Auto-activated techs on unit load (keyed by civ) |
 | `LOCKED_UNIT_TECHS` | Auto-activated + locked (non-clickable) techs per unit ID |
