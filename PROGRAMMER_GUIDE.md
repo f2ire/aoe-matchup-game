@@ -68,6 +68,7 @@ Je veux...
 | `versusOpponentDamageDebuff` | debuff dégâts reçus      | `multiply`           | Multiplie les dégâts subis par ce défenseur (ex. `0.8` = −20%). Voir CLAUDE.md pour les deux chemins d'application. |
 | `opponentHealingRateDebuff`  | bleed / poison           | `change`             | Ajoute N HP/s au DPS de l'attaquant (bypass armure et résistance). Soustrait du `healingRatePerSecond` du défenseur si positif. Ex. `zornhau` (+2), `poisoned-arrows` (+1.85). |
 | `bonusDamageMultiplier`      | bonus dmg (×)            | `multiply`           | Multiplie tous les bonus dmg existants de l'unité par N (ex. `3` = ×3). Phase 3 de `applyTechnologyEffects`. |
+| `burstDecay`                 | dégâts bolts secondaires | `change`             | Fraction des dégâts pour le bolt 2+ d'un burst. Ex. `value: 0.4` → bolts suivants = `baseDmg × 0.4 − armor`. Stocké dans `weapon.burst.decay`. |
 
 **`select`** — filtre les unités ciblées :
 ```ts
@@ -321,6 +322,69 @@ Pattern similaire : ability-dynasty-song
 
 ---
 
+## 3b. Counter abilities — options avancées `DIY`
+
+Les counter abilities incrémentent un compteur (`count`) et appliquent les effets en conséquence.
+
+### `counterStepScale` — incrément différent par effet
+
+Quand deux effets dans la même ability ont des incrément par stack différents :
+
+```ts
+effects: [
+  { property: 'hitpoints', effect: 'change', value: 5, type: 'ability' },                      // +5 HP par stack
+  { property: 'meleeAttack', effect: 'change', value: 1, type: 'ability', counterStepScale: 0.2 } // +1 ATK par 5 stacks
+]
+// valeur finale = count × step × counterStepScale (défaut 1)
+```
+
+### `counterSteps` — incrément variable par stack
+
+Remplace `counterStep`. Les valeurs au-delà du tableau contribuent 0 (plateau).
+
+```ts
+// Avec counterDirection: 'additive' (use effect:'change', values négatives)
+counterSteps: [-5, -4, -3, -2, -1]   // stack 1 = −5, stack 2 = −4, ... plateau à stack 5+
+
+// Sans counterDirection (use effect:'multiply')
+counterSteps: [0.1, 0.08, 0.06]      // effectiveValue = 1 + sum des steps jusqu'à count
+```
+
+### `counterHideMax` — masquer le maximum
+
+Cache le `/max` dans l'affichage — montre uniquement le compteur courant. Utile pour les compteurs sans limite effective (kill counters) :
+
+```ts
+{
+  id: 'ability-kill-tracker',
+  update: {
+    counterMax: 200,
+    counterHideMax: true,   // affiche "12" au lieu de "12/200"
+    ...
+  }
+}
+```
+
+### Interactions ability+ability — `abilityAbilityInteractions` `DIY`
+
+Définies dans `patches/abilities.ts`. Fires quand **les deux** abilities sont actives simultanément. `apply` écrase les stats absolument (ex : override `attackSpeed`) :
+
+```ts
+// patches/abilities.ts
+export const abilityAbilityInteractions = [
+  {
+    requiredAbility1: 'charge-attack',
+    requiredAbility2: 'ability-my-buff',
+    unitIds: ['my-unit'],
+    apply: (stats) => ({ ...stats, attackSpeed: 1.2 })   // valeur absolue, pas additive
+  }
+];
+```
+
+> Ces interactions sont appliquées à la fois dans `modifiedStats` et `modifiedStatsNoTimer` — ne pas oublier les deux call sites dans `useUnitSlot.ts`.
+
+---
+
 ## 4. Créer une technologie synthétique `technologies.ts`
 
 > Si la "technologie" est un bouton cliquable → **préférer une ability synthétique** (Section 3).
@@ -545,6 +609,46 @@ if (baseId === 'demilancer') {
 
 ---
 
+## 6b. Blocs noTimer (abilities à durée limitée) `DIY`
+
+Pour chaque slot, Sandbox.tsx maintient un bloc **noTimer** parallèle au bloc principal :
+
+```
+modifiedVariation1          ← toutes les abilities actives
+modifiedVariation1NoTimer   ← idem mais effets avec duration stripés
+modifiedVariation2 / modifiedVariation2NoTimer
+modifiedUnit1 / modifiedUnit1NoTimer         (equal-cost)
+modifiedUnit2 / modifiedUnit2NoTimer
+```
+
+Le stripping est au niveau **effet** (pas ability) : un effet portant un champ `duration` est exclu de la variation noTimer. `activeTimedDuration` = minimum de toutes les `duration` des effets actifs.
+
+**Règle** : quand tu ajoutes un effet avec `duration`, il sera automatiquement pris en compte — aucun changement de code requis. Mais si tu ajoutes un **nouveau stat** utilisé dans combat.ts, il doit être injecté dans les **8 blocs** (4 normaux + 4 noTimer).
+
+---
+
+## 6c. Constantes clés `useUnitSlot.ts` — référence rapide
+
+| Constante | Rôle |
+|-----------|------|
+| `ABILITY_UPGRADE_GROUPS` | Tiers mutuellement exclusifs d'abilities |
+| `ABILITY_DEPENDENCIES` | Ability verrouillée sans une autre ability |
+| `ABILITY_SUPPRESSIONS` | Ability supprimée (effets ignorés) quand une autre est active |
+| `ABILITY_TECH_DEPENDENCIES` | Ability verrouillée sans une tech |
+| `TECH_ABILITY_DEPENDENCIES` | Tech verrouillée sans une ability |
+| `TECH_ABILITY_LEVEL_DEPENDENCIES` | Tech verrouillée jusqu'à `minLevel` d'une ability counter |
+| `ABILITY_LEVEL_DEPENDENCIES` | Ability verrouillée jusqu'à `minLevel` d'une autre ability counter ; supporte `civs[]` |
+| `TECH_TECH_DEPENDENCIES` | Tech visible seulement si une autre tech est active, pour des unit IDs spécifiques. Cascade à la désactivation + auto-ajout au "full upgrade". |
+| `CIV_TECH_EXCLUSIVE_GROUPS` | Techs mutuellement exclusives spécifiques à une civ |
+| `DEFAULT_ACTIVE_TECHS` | Techs auto-activées au chargement d'une unité (par civ) |
+| `LOCKED_UNIT_TECHS` | Techs auto-activées **et** verrouillées (non-cliquables) par unit ID |
+| `WEAPON_SWAP_GROUPS` / `WEAPON_SWAP_DEFAULTS` | Unités à double arme — groupes et arme sélectionnée par défaut |
+| `EXCLUDED_UNIT_IDS` | Unités masquées globalement |
+| `BASE_MODIFYING_ABILITY_IDS` | Abilities appliquées en dernier (HP multiplicatif, ex. Clocktower) |
+| `ABILITY_ROW_GROUPS` *(abilities.ts)* | Lignes visuelles réservées dans AbilitySelector |
+
+---
+
 ## 7. Gérer un bug `DIY`
 
 ### Triage rapide
@@ -630,7 +734,7 @@ Checklist dans l'ordre :
 
 3. **Propriété spéciale ?** — `attackSpeed`, `rangedResistance`, `meleeResistance`, `healingRate`, `healingRatePerSecond`, `opponentHealingRateDebuff`, `costReduction`, `armorPenetration`, etc. → Phase 3 de `applyTechnologyEffects`. **Deux listes à mettre en sync** dans `unified-technologies.ts` : `combatProperties` (~ligne 95) ET le guard `if (property === ...)` (~ligne 490). Manquer l'une des deux = effet ignoré silencieusement (aucune erreur).
 
-4. **Injecté dans les 4 blocs Sandbox ?** — Tout nouveau stat doit être dans `modifiedVariationAlly`, `modifiedVariationEnemy`, `modifiedUnit1`, `modifiedUnit2`.
+4. **Injecté dans les 4 blocs Sandbox ?** — Tout nouveau stat doit être dans `modifiedVariation1`, `modifiedVariation2`, `modifiedUnit1`, `modifiedUnit2`.
 
 5. **`multiply` sur HP ?** — Stacking additif, pas multiplicatif. `×1.25 + ×1.10 = ×1.35` (pas ×1.375).
 
@@ -671,8 +775,8 @@ Le stat concerné est `[UnitStats.xxx]` / apparaît dans modifiedVariation ? [ou
 **Diagnostic rapide :**
 ```ts
 // Dans Sandbox.tsx, juste avant computeVersus / computeVersusAtEqualCost :
-console.log('[DEBUG] entityAlly', JSON.stringify(modifiedVariationAlly))
-console.log('[DEBUG] entityEnemy', JSON.stringify(modifiedVariationEnemy))
+console.log('[DEBUG] entity1', JSON.stringify(modifiedVariation1))
+console.log('[DEBUG] entity2', JSON.stringify(modifiedVariation2))
 ```
 
 **Prompt Claude →**
@@ -713,3 +817,6 @@ modifiedVariation semble correct : [oui|non].
 | `update.effects` sur variation sans effet | `applyTechnologyEffects` ignore `variation.effects` si `tech.effects` non vide | Utiliser `after` |
 | Ability appliquée deux fois | Effets aux deux niveaux (ability + variation) | Un seul niveau — top-level en général |
 | Ability invisible dans le sélecteur | Aucun effet combat-relevant | `isCombatAbility` → ajouter un effet `value: 0` dummy |
+| Nouveau stat absent des blocs noTimer | Injecté dans les 4 blocs principaux mais pas les 4 noTimer | Injecter dans les **8 blocs** de Sandbox.tsx |
+| `abilityAbilityInteractions` ignorée | Apply non appelé dans `modifiedStatsNoTimer` | Vérifier les deux call sites dans `useUnitSlot.ts` |
+| Tech avec dépendance invisible | `TECH_TECH_DEPENDENCIES` absent ou `unitIds` incorrect | Vérifier que les deux IDs (tech requise + tech dépendante) et `unitIds` sont corrects |

@@ -64,6 +64,7 @@ CombatEntity (derived at compute time in combat.ts):
   - `select.id` only → `applyTechnologyEffects` sets the stat on the defender; applies to ALL attackers.
   - `select.class` (with or without `select.id`) → `applyTechnologyEffects` skips it; `getVersusDebuffMultiplier` in combat.ts applies it only when the ATTACKER matches the class. Keep `select.id` for ability-selector visibility but the stat itself is NOT set via modifiedStats.
   maxHpBonusFraction  ← flat bonus damage per hit = fraction × defender.hitpoints, bypasses armor/resistance. Set via patches/units.ts on variations (e.g. kanabo-samurai: 0.06). Read in baseStats like healingRatePerSecond — NOT a tech/ability effect property.
+  hpStartFraction   ← fraction of max HP the unit enters combat with (default 1; e.g. 0.9 = starts at 90% HP). Applied in computeMetrics to totalDefHP/totalDefenderHP and in winnerHpRemaining as startHp. Clamped to [0,1]. Set via ability/tech `effect:'change', property:'hpStartFraction'` — IS a special property. For geometric stacking (0.9^N), use per-effect `counterSteps: [-0.1, -0.09, -0.081, ...]` with `counterDirection:'additive'`.
   firstHitBlocked   ← injected in Sandbox.tsx when ability-deflective-armor active
   postChargeMeleeBonus  ← subtracted from hit 1 baseDamage when chargeBonus > 0 (royal-knight/jeanne-darc-knight post-charge buff)
   chargeModifiers   ← class-specific bonus damage added to the dagger/javelin hit (before ranged armor). Set in Sandbox.tsx 4 blocks. e.g. donso javelin: +X vs cavalry (age-scaled).
@@ -143,7 +144,11 @@ after: (tech) => ({ ...tech, effects: [], variations: tech.variations.map(v => (
 ### Special properties (Phase 3 in applyTechnologyEffects)
 `maxRange`, `attackSpeed`, `rangedResistance`, `meleeResistance`, `healingRate`, `healingRatePerSecond`, `burst`, `burstDecay`,
 `costReduction`, `stoneCostReduction`, `foodCostReduction`, `goldCostReduction`, `chargeMultiplier`, `chargeChange`, `bonusDamageMultiplier`, `armorPenetration`,
-`rangedResistance`, `meleeResistance`, `siegeResistance`, `opponentAttackSpeedDebuff`, `versusOpponentDamageDebuff`, `opponentHealingRateDebuff`
+`rangedResistance`, `meleeResistance`, `siegeResistance`, `opponentAttackSpeedDebuff`, `versusOpponentDamageDebuff`, `opponentHealingRateDebuff`,
+`hpStartFraction`,
+`secondaryWeaponAttackSpeedMultiplier`
+
+`secondaryWeaponAttackSpeedMultiplier` ← multiplier applied to `secondaryWeapons[].speed` in Sandbox.tsx (all 4 modifiedVariation blocks). NOT applied in `toCombatEntity` — the corrected speed is already on the variation object by the time combat reads it. Set via `effect:'multiply'` on a `select.id` targeting the unit whose secondary weapon needs buffing (e.g. war-elephant's spearman weapon).
 
 `burstDecay` — secondary bolt damage fraction (no bonus damage). `effect:'change', value:0.4` sets it. In combat.ts: bolt 1 = full damage; bolt 2+ = `effectiveBaseDamage × decay − armor`, same debuff/resistance, clamped to 1. Stored as `weapon.burst.decay` (set via Sandbox.tsx burst assembly) and `modifiedStats.burstDecay` (UnitStats).
 
@@ -203,7 +208,11 @@ Two `useUnitSlot` hooks (`civ1` + `civ2`). State: `isVersus`, `atEqualCost`, `al
 
 `useUnitSlot` also returns `modifiedStatsNoTimer` (stats with duration-tagged effects stripped) and `activeTimedDuration` (minimum `duration` across all effects of active abilities, or undefined). Duration is read directly from effect objects in `patches/abilities.ts` — no hardcoded map.
 
-Counter ability effects support `counterStepScale?: number` (on `TechnologyEffect`): final value = `count × step × counterStepScale`. Defaults to 1. Use when two effects in the same counter ability need different per-stack increments (e.g. +5 HP and +1 ATK per kill).
+Counter ability effects support `counterStepScale?: number` (on `TechnologyEffect`): final value = `effectiveValue × counterStepScale`. Defaults to 1. Use when two effects share the same step formula but need different magnitudes.
+
+`counterStep?: number` / `counterSteps?: number[]` / `counterDirection?: string` (on `TechnologyEffect`): per-effect overrides of the ability-level step and direction. When present, that effect computes its own `effectiveValue` independently — enabling structurally different formulas on the same counter. Falls back to ability-level values when absent. Compatible with `counterStepScale` (both applied: `eValue × counterStepScale`).
+
+Available `counterDirection` values (ability-level and per-effect): `'additive'` → `count × step`; `'increase'` → `1 + count × step`; `'geometric'` → `step^count` (use with `effect:'multiply'` for geometric HP decay, e.g. `counterStep:0.9` gives `0.9^N`); default → `1/(1 + count × step)`.
 
 `counterSteps?: number[]` (on `Technology`/`Ability`): per-stack increment array. Overrides `counterStep` when present. Formula depends on `counterDirection`: `additive` → `effectiveValue = sum(counterSteps[0..count-1])` (use with `effect:'change'` and negative values); otherwise → `effectiveValue = 1 + sum(...)` (use with `effect:'multiply'`). Values beyond the array length contribute 0 (plateau).
 
