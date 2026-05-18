@@ -99,6 +99,9 @@ Key utilities (unified-units.ts): `getUnitVariation`, `getMaxAge`, `getPrimaryWe
 
 ## PATCH SYSTEM — CRITICAL RULES
 
+### Creating entirely new units
+Add entries to `newUnits` array in `patches/units.ts`. Each entry must be a full `UnifiedUnit` object (`id, name, type:'unit', civs, unique, displayClasses, classes, minAge, icon, description, variations[]`). Variations must include all required fields — see the commented example in `newUnits`. `applyUnitPatches` appends `newUnits` after all patched JSON units, so they appear in `allUnits` and `aoe4Units` automatically. These units can be patched again via `unitPatches` if needed (match by `id`).
+
 ### #1 rule: update.effects vs after
 - `update.effects` → top-level ability only — **never affects variation effects**
 - Variation effects come from raw JSON → to fix them, **always use `after`** to rewrite `v.effects`
@@ -165,7 +168,7 @@ Nested arrays `[['light','melee','infantry']]` match via `expandedTokens`. Token
 - `foreignEngineeringUnits: ['id']` → restricts to specific units for Byzantine
 - `excludedUnits: ['id']` → hides tech globally for those units
 - `injectWeapon: {...}` → secondary weapon injected from tech (appended in useUnitSlot)
-- `uiTooltip` / `uiTooltipNative` / `unitTooltips` → display text overrides
+- `uiTooltip` / `uiTooltipNative` / `unitTooltips` → display text overrides. `uiTooltip` can also be set directly on the `Technology` object (for synthetic techs) — `TechnologySelector` resolves `patch?.uiTooltip || tech.uiTooltip`.
 
 ---
 
